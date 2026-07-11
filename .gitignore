@@ -1,20 +1,25 @@
-# Virtual Environment
+# Virtual environment
 venv/
 
 # Python cache
 __pycache__/
-*.py[cod]
+*.pyc
 
 # Environment variables
 .env
-config.py
+
+# Playwright browser profile
+playwright-profile/
+
+# Logs
+logs/
+
+# Screenshots
+screenshots/
 
 # VS Code
 .vscode/
 
-# Generated folders
-data/logs/
-data/screenshots/
-
-# OS
+# OS files
 .DS_Store
+Thumbs.db

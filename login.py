@@ -1,66 +1,35 @@
 from playwright.sync_api import sync_playwright
-from config import LINKEDIN_EMAIL, LINKEDIN_PASSWORD
+
 
 def login():
     with sync_playwright() as p:
-        browser = p.chromium.launch(
+
+        context = p.chromium.launch_persistent_context(
+            user_data_dir="playwright-profile",
             headless=False,
-            slow_mo=500
+            viewport=None,
+            args=["--start-maximized"]
         )
 
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        page = context.new_page()
 
-        print("=" * 60)
-        print("LinkedIn Login Automation")
-        print("=" * 60)
+        print("Opening LinkedIn...")
 
-        print("\nOpening LinkedIn...")
-        page.goto(
-            "https://www.linkedin.com/login",
-            wait_until="domcontentloaded"
-        )
+        page.goto("https://www.linkedin.com/login")
 
-        page.wait_for_load_state("domcontentloaded")
-        page.wait_for_timeout(3000)
+        print("\n======================================")
+        print("1. Login to LinkedIn.")
+        print("2. Complete CAPTCHA if it appears.")
+        print("3. Wait until LinkedIn Feed opens.")
+        print("4. Come back to terminal.")
+        print("======================================\n")
 
-        print("Current URL :", page.url)
-        print("Page Title  :", page.title())
+        input("Press ENTER after LinkedIn Feed opens...")
 
-        print("\nTyping Email...")
-        page.get_by_role(
-            "textbox",
-            name="Email or phone"
-        ).fill(LINKEDIN_EMAIL)
+        print("\n✅ Login session saved successfully!")
 
-        print("Typing Password...")
-        page.get_by_role(
-            "textbox",
-            name="Password"
-        ).fill(LINKEDIN_PASSWORD)
+        context.close()
 
-        print("Clicking Sign In...")
-        page.get_by_role(
-            "button",
-            name="Sign in",
-            exact=True
-        ).click()
-
-        print("\nWaiting for login...")
-
-        page.wait_for_timeout(10000)
-
-        print("Current URL :", page.url)
-
-        page.screenshot(
-            path="data/screenshots/after_login.png",
-            full_page=True
-        )
-
-        print("Screenshot saved.")
-
-        input("\nPress ENTER to close browser...")
-
-        browser.close()
 
 if __name__ == "__main__":
     login()
