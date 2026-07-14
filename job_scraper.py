@@ -1,38 +1,81 @@
 from playwright.sync_api import sync_playwright
+import csv
 
 with sync_playwright() as p:
-    browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
 
+    browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
     context = browser.contexts[0]
 
     page = None
-    for tab in context.pages:
-        if "linkedin.com/jobs" in tab.url:
-            page = tab
+    for pg in context.pages:
+        if "linkedin.com/jobs" in pg.url:
+            page = pg
             break
 
     if page is None:
-        raise Exception("Jobs page not found!")
+        raise Exception("LinkedIn Jobs tab not found!")
 
-    print("Title:", page.title())
-
-    print("\n===== ALL LINKS =====\n")
+    print("Connected to:", page.title())
 
     links = page.locator("a")
 
-    print("Total links:", links.count())
+    jobs = []
 
-    for i in range(min(50, links.count())):
+    for i in range(links.count()):
+
         try:
             text = links.nth(i).inner_text().strip()
             href = links.nth(i).get_attribute("href")
 
-            if text:
-                print(f"\n{i+1}")
-                print("TEXT :", text)
-                print("LINK :", href)
+            if href and "currentJobId=" in href and text:
+
+                lines = text.split("\n")
+
+                title = lines[0] if len(lines) > 0 else ""
+
+                company = ""
+                if len(lines) > 1:
+                    company = lines[1]
+
+                location = ""
+                for line in lines:
+                    if any(city in line for city in [
+                        "Bengaluru",
+                        "Hyderabad",
+                        "Chennai",
+                        "Remote",
+                        "Pune",
+                        "Mumbai",
+                        "India"
+                    ]):
+                        location = line
+                        break
+
+                easy_apply = "Yes" if "Easy Apply" in text else "No"
+
+                jobs.append([
+                    title,
+                    company,
+                    location,
+                    easy_apply,
+                    href
+                ])
 
         except:
             pass
 
-    input("\nPress ENTER...")
+with open("jobs.csv", "w", newline="", encoding="utf-8") as file:
+
+    writer = csv.writer(file)
+
+    writer.writerow([
+        "Title",
+        "Company",
+        "Location",
+        "Easy Apply",
+        "Link"
+    ])
+
+    writer.writerows(jobs)
+
+print(f"Saved {len(jobs)} jobs to jobs.csv")

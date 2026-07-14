@@ -1,20 +1,8 @@
-Title,Company,Location,Easy Apply
-Jobs,,,No
-Date posted,,,No
-Experience level,,,No
-Employment type,,,No
-Company,,,No
-Jobs,,,No
-Date posted,,,No
-Experience level,,,No
-Employment type,,,No
-Company,,,No
-Greater Bengaluru Area,,,No
-How promoted jobs are ranked,,,No
-Java Developer  (Verified job),Java Developer,"Enterprise Minds, Inc",Yes
-Java Developer (Verified job),Java Developer,Zensar Technologies,No
-Java Developer (Verified job),Java Developer,Synechron,No
-Back End Developer (Verified job),Back End Developer,ACL Digital,Yes
-Java Engineer,Java Engineer,Shuru,No
-Software Engineer II (Verified job),Software Engineer II,Philips,No
-Junior Java Developer,Junior Java Developer,Miratech,Yes
+Title,Company,Location,Easy Apply,Link
+Software Engineer_Backend Developer (Verified job),Software Engineer_Backend Developer ,FundsIndia,Yes,https://www.linkedin.com/jobs/search-results/?keywords=Junior+Java+Developer+or+Back+End+Developer+or+Software+Engineer+or+Java+Software+Engineer+or+Graduate+Software+Engineer%2C+on-site+or+hybrid+or+remote&origin=JobSearchOrigin_PREFERENCES_LANDING&currentJobId=4435452017&trackingId=0lYcJHXdS9FOZF9FfwkAmA%3D%3D&refId=AOt1UBN8eIh9nGh8Mwr%2Brw%3D%3D&eBP=BUDGET_EXHAUSTED_JOB&geoId=105214831%2C105556991%2C106888327
+Software Engineer (Verified job),Software Engineer ,India (Remote),Yes,https://www.linkedin.com/jobs/search-results/?keywords=Junior+Java+Developer+or+Back+End+Developer+or+Software+Engineer+or+Java+Software+Engineer+or+Graduate+Software+Engineer%2C+on-site+or+hybrid+or+remote&origin=JobSearchOrigin_PREFERENCES_LANDING&currentJobId=4436652797&trackingId=dijzBxgIFL%2BvjeVsXxH1tQ%3D%3D&refId=AOt1UBN8eIh9nGh8Mwr%2Brw%3D%3D&eBP=CwEAAAGfX1Tv1c-ATeEEsI_4XV6u0s_2RiY8SlxXq331khNnTnxH5zBidSKdqwShbbB8BBrU_nnrlm7QgRQT4eaFd-KUHESGKqv_WCGZK97WPuushibWpeIN7DyRSGICOCtOWlrMqG3PclgPKuEksdRSPrlS6Aygp0mUzBqCNoq78cmS-ccM07PRrLGrXbQ-xW0VOX46w3cLEfFomVGgSuF99RcyLXwlPV29E8DDx0dJkY37WUVGMZ33wEEYsanAcq0ZJfXpTYK74lHL5d7y310eQtId7eUxU1SL9Cz1pY5RxjfA_yB7B0iPCanvVAmarm0Q94umNTjq5H-Nl0bLC7eqM0BZrqQfhhLeMNQsHx3QgljJbL0JWu9sW-lccXfdN2MzfM7UTAwaYVokBYBSSy8Qb_lE9pKkUbhg4FIAyEwO5Ljab7xSN_IM79Kn-mKZ31eZGLgYKVw2g_Cxgwg14QkAGIYlod7Qvwwkjot86YetqgMYTJjfkUgLvENdczuqaX_XNj15C8g&geoId=105214831%2C105556991%2C106888327
+Software Development Engineer [PSET- Access - Eng] (Verified job),Software Development Engineer [PSET- Access - Eng] ,Bengaluru (Hybrid),No,https://www.linkedin.com/jobs/search-results/?keywords=Junior+Java+Developer+or+Back+End+Developer+or+Software+Engineer+or+Java+Software+Engineer+or+Graduate+Software+Engineer%2C+on-site+or+hybrid+or+remote&origin=JobSearchOrigin_PREFERENCES_LANDING&currentJobId=4439433091&trackingId=Dz8BCCYORZ7DnVDrJBKdJw%3D%3D&refId=AOt1UBN8eIh9nGh8Mwr%2Brw%3D%3D&eBP=BUDGET_EXHAUSTED_JOB&geoId=105214831%2C105556991%2C106888327
+Java Software Engineer,,Hyderabad (On-site),Yes,https://www.linkedin.com/jobs/search-results/?currentJobId=4439131405&eBP=NON_CHARGEABLE_CHANNEL&refId=CW43PuwZFv4a0XuTQYQDhA%3D%3D&trackingId=LWSmr%2B1SKGfKGmwZdW068g%3D%3D&showHowYouFit=HOW_YOU_FIT&keywords=Java+Backend+Developer%2C+on-site+or+hybrid+or+remote&origin=QUALIFICATION_LANDING&geoId=105214831%2C105556991%2C106888327
+Java Backend Developer,,Bengaluru (On-site),Yes,https://www.linkedin.com/jobs/search-results/?currentJobId=4438914819&eBP=NON_CHARGEABLE_CHANNEL&refId=CW43PuwZFv4a0XuTQYQDhA%3D%3D&trackingId=vKKcuBf6LcweedAc39SZgQ%3D%3D&showHowYouFit=HOW_YOU_FIT&keywords=Java+Backend+Developer%2C+on-site+or+hybrid+or+remote&origin=QUALIFICATION_LANDING&geoId=105214831%2C105556991%2C106888327
+SDE 2 (Backend) ,,Bengaluru (On-site),Yes,https://www.linkedin.com/jobs/search-results/?currentJobId=4436599028&eBP=BUDGET_EXHAUSTED_JOB&refId=CW43PuwZFv4a0XuTQYQDhA%3D%3D&trackingId=5Rqmb8ha8kJbG8xYtgJsKw%3D%3D&showHowYouFit=HOW_YOU_FIT&keywords=Java+Backend+Developer%2C+on-site+or+hybrid+or+remote&origin=QUALIFICATION_LANDING&geoId=105214831%2C105556991%2C106888327
+Java Developer ,,,Yes,https://www.linkedin.com/jobs/search-results/?currentJobId=4427831838&eBP=CwEAAAGfX1T1DPjJIPwc7wH7qmxOWVrsiv62HuyAVHWlX1BbDVlyxLxCv9TUalcC5-UbKM_5fvoUvTna0Wu0qv1-Pm8GFvsANVBqvSlbxeXH2HozWuBwakCdStngc_R6ZdRBUojfgdNQZ1fZjDW50ExVIBUIldqDRWGlpbDJpdLl3roapi8_fn5tB4uMHCnFocIcZKaRMYioK6zAoWYR30DKpYkPKbbv1BhzQVXitgtRbR_g-e0X3uA7cEY_dc7FAxNIvhQAe1eithHGpxcyAAPqFIyvqda3q_IsZtEwoUSMi74tfEZbVHioUiSGUzgqlUAoxu8iMIDGYkvS1UT7WDCdCO0sSESt2oYPN1a6GlqyOEOOQbVFupjKkx1kVpW6yMftDa26yh6JPkpMNlej7duYOyeFI8lxW5V_D17JzPRb1X78KHJl4wRRTWYGhSiEMTP025Vo4NXhAHnaGUkz&refId=CW43PuwZFv4a0XuTQYQDhA%3D%3D&trackingId=Rif9BH66wH%2BzST%2F%2BH04FOg%3D%3D&showHowYouFit=HOW_YOU_FIT&keywords=Java+Backend+Developer%2C+on-site+or+hybrid+or+remote&origin=QUALIFICATION_LANDING&geoId=105214831%2C105556991%2C106888327
