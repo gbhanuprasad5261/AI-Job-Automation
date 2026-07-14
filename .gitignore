@@ -23,3 +23,14 @@ screenshots/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Output files
+jobs.csv
+jobs_page.png
+
+# Generated data
+data/*.csv
+data/*.png
+
+# Resume
+resume/*.pdf
