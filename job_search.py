@@ -4,26 +4,24 @@ from config import LINKEDIN_EMAIL, LINKEDIN_PASSWORD
 
 
 def search_jobs():
+
     with sync_playwright() as p:
 
-        # ---------------------------------------
-        # Launch Browser
-        # ---------------------------------------
-        browser = p.chromium.launch(
-            headless=False,
-            slow_mo=500,
-            args=["--start-maximized"]
+        browser = p.chromium.connect_over_cdp(
+            "http://127.0.0.1:9222"
         )
+    
 
-        context = browser.new_context(
-            viewport=None
-        )
+        context = browser.contexts[0]
 
-        page = context.new_page()
+        page = context.pages[0]
+
+        print("Connected to:", page.title())
 
         # ---------------------------------------
         # Login
         # ---------------------------------------
+
         print("Opening LinkedIn...")
         page.goto("https://www.linkedin.com/login")
 
@@ -46,71 +44,68 @@ def search_jobs():
             exact=True
         ).click()
 
-        # ---------------------------------------
-        # Handle Verification
-        # ---------------------------------------
-
         print("Waiting for login...")
         page.wait_for_timeout(5000)
 
         if "checkpoint" in page.url:
-            print("\nLinkedIn verification detected.")
-            print("Complete the CAPTCHA in the browser.")
+            print("Complete CAPTCHA")
             input("Press ENTER after verification...")
 
-            # Wait until LinkedIn finishes redirecting
-            page.wait_for_load_state("networkidle")
-            page.wait_for_timeout(5000)
+            while "feed" not in page.url and "jobs" not in page.url:
+             page.wait_for_timeout(1000)
 
-        print("Login Successful!")
+        print("Logged in successfully")
+
+       
 
         # ---------------------------------------
-        # Open Jobs Page
+        # Jobs Page
         # ---------------------------------------
-
-        print("Opening Jobs page...")
-
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(3000)
 
         page.goto(
             "https://www.linkedin.com/jobs/",
             wait_until="networkidle"
         )
 
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(5000)
+        page.wait_for_timeout(4000)
 
         print(page.url)
+
         # ---------------------------------------
-        # Search Job
+        # Search
         # ---------------------------------------
-        print("Searching jobs...")
 
         search_box = page.get_by_placeholder(
             "Describe the job you want"
         )
 
-        search_box.click()
         search_box.fill("Java Backend Developer")
+
         page.keyboard.press("Enter")
 
-        page.wait_for_timeout(5000)
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(4000)
 
         print(page.url)
+
+        page.screenshot(
+            path="search_results.png",
+            full_page=True
+        )
 
         # ---------------------------------------
         # Collect Jobs
         # ---------------------------------------
-        print("\nCollecting job information...\n")
 
-        page.wait_for_timeout(5000)
+        print("\nSearching for job cards...")
 
-        job_cards = page.get_by_role("button")
+        cards = page.locator(
+            "li.scaffold-layout__list-item"
+        )
 
-        count = job_cards.count()
+        count = cards.count()
 
-        print(f"Found {count} buttons\n")
+        print(f"Found {count} job cards\n")
 
         jobs = []
 
@@ -118,32 +113,44 @@ def search_jobs():
 
             try:
 
-                card = job_cards.nth(i)
+                card = cards.nth(i)
 
-                text = card.inner_text().strip()
+                card.scroll_into_view_if_needed()
 
-                print("----------------------------------")
-                print(f"Button {i + 1}")
-                print(text)
+                page.wait_for_timeout(500)
 
-                if not text:
-                    continue
+                card.click(force=True)
 
-                lines = [
-                    line.strip()
-                    for line in text.split("\n")
-                    if line.strip()
-                ]
+                page.wait_for_timeout(2500)
 
-                # Skip filter buttons
-                if len(lines) < 3:
-                    continue
+                title = ""
+                company = ""
+                location = ""
+                easy_apply = "No"
 
-                title = lines[0]
-                company = lines[1]
-                location = lines[2]
+                try:
+                    title = page.locator("h1").first.inner_text().strip()
+                except:
+                    pass
 
-                easy_apply = "Yes" if "Easy Apply" in text else "No"
+                try:
+                    company = page.locator(
+                        "a[href*='/company/']"
+                    ).first.inner_text().strip()
+                except:
+                    pass
+
+                try:
+                    location = page.locator(
+                        "div.job-details-jobs-unified-top-card__primary-description-container"
+                    ).inner_text().strip()
+                except:
+                    pass
+
+                body = page.locator("body").inner_text()
+
+                if "Easy Apply" in body:
+                    easy_apply = "Yes"
 
                 jobs.append({
                     "Title": title,
@@ -152,12 +159,16 @@ def search_jobs():
                     "Easy Apply": easy_apply
                 })
 
+                print(f"{i+1}. {title}")
+
             except Exception as e:
-                print(f"Skipping Button {i + 1}: {e}")
+
+                print(f"Skipped {i+1}: {e}")
 
         # ---------------------------------------
         # Save CSV
         # ---------------------------------------
+
         with open(
             "jobs.csv",
             "w",
