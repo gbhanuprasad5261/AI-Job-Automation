@@ -59,3 +59,18 @@ print("AI JOB ANALYSIS COMPLETED")
 print("=" * 50)
 print(f"Jobs analyzed : {len(jobs)}")
 print(f"Saved file    : {OUTPUT_FILE}")
+
+# ---------------------------------------
+# BEST MATCH
+# ---------------------------------------
+
+if jobs:
+    best = max(jobs, key=lambda x: int(x["Match Score"]))
+
+    print("\n" + "=" * 50)
+    print("BEST MATCH")
+    print("=" * 50)
+    print(f"Title   : {best['Title']}")
+    print(f"Company : {best['Company']}")
+    print(f"Score   : {best['Match Score']}%")
+    print(f"Missing : {best['Missing Skills']}")
