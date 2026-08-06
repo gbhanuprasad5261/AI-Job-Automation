@@ -1,90 +1,151 @@
 # 🤖 AI Job Automation
 
+<div align="center">
+
+### AI-Powered LinkedIn Job Search & Resume Matching Automation
+
+Automate job discovery, analyze resume compatibility, identify skill gaps, and streamline your job search using **Python** and **Playwright**.
+
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
 ![Playwright](https://img.shields.io/badge/Playwright-Automation-green?logo=playwright)
-![GitHub](https://img.shields.io/badge/GitHub-Project-black?logo=github)
-![Status](https://img.shields.io/badge/Status-Under%20Development-orange)
+![GitHub](https://img.shields.io/badge/GitHub-Portfolio-black?logo=github)
+![Status](https://img.shields.io/badge/Status-Active-success)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
-An AI-powered LinkedIn job automation project built with **Python** and **Playwright** to automate job discovery and intelligently match opportunities against a candidate's resume.
-
-The project is designed to reduce manual effort during job hunting by automating repetitive tasks such as searching for jobs, collecting job information, parsing resumes, and preparing for automated application workflows.
+</div>
 
 ---
 
-# 📌 Features
+# 📖 Overview
+
+Finding and applying for software engineering jobs manually is repetitive and time-consuming.
+
+**AI Job Automation** is a Python-based automation project that simplifies the job application process by automating LinkedIn job search, extracting job information, parsing resumes, matching skills, and preparing for AI-powered application automation.
+
+The project is designed with a modular architecture, making it scalable for future AI enhancements and additional job platforms.
+
+---
+
+# ✨ Features
 
 ## ✅ Implemented
 
-- LinkedIn automation using Playwright
-- Persistent Chrome login session
-- Automatic LinkedIn Jobs navigation
-- Job scraping
-- Export jobs to CSV
+### 🔹 LinkedIn Automation
+
+- Automated LinkedIn job search
+- Chrome DevTools Protocol (CDP) integration
+- Persistent login session
+- Automatic navigation to LinkedIn Jobs
+- Job data extraction
+
+### 🔹 Job Extraction
+
+Extracts:
+
+- Job Title
+- Company Name
+- Location
+- Easy Apply Status
+- Job URL
+
+Exports all collected jobs into CSV format.
+
+---
+
+### 🔹 Resume Analysis
+
 - Resume PDF parsing
-- Resume skill extraction
-- GitHub project structure
-- Modular Python architecture
+- Resume text extraction
+- Technical skill extraction
+- Resume skill database
+- Resume vs Job skill comparison
+- Missing skills identification
 
 ---
 
-## 🚧 In Progress
+### 🔹 AI Job Analysis
 
-- Full job description extraction
-- Resume vs Job matching
-- Match score generation
-- Easy Apply automation
-- Automatic resume upload
-- Form autofill
-- Application reporting
+- Resume matching
+- Job analysis report generation
+- CSV export
+- Best matching job identification
 
 ---
 
-# 🏗️ Project Architecture
+# 🚧 Upcoming Features
 
-```
-Resume PDF
-      │
-      ▼
-Resume Parser
-      │
-      ▼
-Skill Extraction
-      │
-      ▼
-LinkedIn Job Search
-      │
-      ▼
-Job Scraper
-      │
-      ▼
-CSV Storage
-      │
-      ▼
-AI Resume Matching
-      │
-      ▼
-Easy Apply Automation
+- One-click Easy Apply Automation
+- Automatic Resume Upload
+- Form Autofill
+- AI Resume Optimization
+- AI Cover Letter Generator
+- Recruiter Message Generator
+- Application Tracking Dashboard
+- Email Notifications
+- Multi-Platform Job Search
+
+---
+
+# 🏗️ System Architecture
+
+```text
+                Resume.pdf
+                     │
+                     ▼
+              Resume Parser
+                     │
+                     ▼
+            Skill Extraction
+                     │
+                     ▼
+         LinkedIn Job Search
+                     │
+                     ▼
+            Job Information
+                     │
+                     ▼
+               CSV Storage
+                     │
+                     ▼
+          AI Resume Matching
+                     │
+                     ▼
+        Missing Skills Analysis
+                     │
+                     ▼
+        Best Job Recommendation
+                     │
+                     ▼
+         Easy Apply Automation
 ```
 
 ---
 
 # 📂 Project Structure
 
-```
+```text
 AI-Job-Automation/
 │
-├── auth/
 ├── data/
-├── logs/
+│   ├── jobs.csv
+│   ├── job_details.csv
+│   └── job_analysis.csv
+│
 ├── resume/
+│   └── resume.pdf
+│
 ├── screenshots/
 │
-├── connect.py
 ├── config.py
+├── connect.py
 ├── login.py
-├── job_scraper.py
+├── job_search.py
 ├── job_details.py
+├── job_analyzer.py
 ├── resume_matcher.py
+├── skill_matcher.py
+├── test_matcher.py
+├── start_chrome.bat
 ├── requirements.txt
 ├── README.md
 └── .gitignore
@@ -92,16 +153,16 @@ AI-Job-Automation/
 
 ---
 
-# 🛠️ Tech Stack
+# ⚙️ Technologies Used
 
 | Technology | Purpose |
-|------------|---------|
-| Python | Programming Language |
+|------------|----------|
+| Python | Core Programming |
 | Playwright | Browser Automation |
-| pdfplumber | Resume PDF Parsing |
+| pdfplumber | Resume Parsing |
 | CSV | Data Storage |
 | Git | Version Control |
-| GitHub | Repository Hosting |
+| GitHub | Source Code Hosting |
 
 ---
 
@@ -119,13 +180,13 @@ Navigate into the project
 cd AI-Job-Automation
 ```
 
-Create a virtual environment
+Create Virtual Environment
 
 ```bash
 python -m venv venv
 ```
 
-Activate the environment
+Activate Virtual Environment
 
 ### Windows
 
@@ -133,7 +194,7 @@ Activate the environment
 venv\Scripts\activate
 ```
 
-Install dependencies
+Install Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -141,21 +202,41 @@ pip install -r requirements.txt
 
 ---
 
-# ▶️ Running the Project
+# ▶️ Usage
 
-Start Chrome with remote debugging enabled.
-
-Run the required modules.
-
-Example:
+## Start Chrome with Remote Debugging
 
 ```bash
-python login.py
+start_chrome.bat
 ```
 
+---
+
+## Search Jobs
+
 ```bash
-python job_scraper.py
+python job_search.py
 ```
+
+---
+
+## Extract Job Details
+
+```bash
+python job_details.py
+```
+
+---
+
+## Analyze Jobs
+
+```bash
+python job_analyzer.py
+```
+
+---
+
+## Resume Matching
 
 ```bash
 python resume_matcher.py
@@ -163,69 +244,151 @@ python resume_matcher.py
 
 ---
 
-# 📊 Current Progress
+# 📊 Sample Output
+
+```text
+==========================================
+AI JOB ANALYSIS COMPLETED
+==========================================
+
+Jobs analyzed : 20
+
+Best Match
+
+Title      : Java Backend Developer
+Company    : ABC Technologies
+Match Score: 92%
+
+Missing Skills:
+Docker
+AWS
+```
+
+---
+
+# 📈 Project Progress
 
 | Module | Status |
-|---------|:------:|
+|----------|:------:|
 | Playwright Setup | ✅ |
-| LinkedIn Login | ✅ |
+| LinkedIn Automation | ✅ |
+| Chrome CDP Integration | ✅ |
 | Job Search | ✅ |
-| Job Scraper | ✅ |
+| Job Extraction | ✅ |
 | CSV Export | ✅ |
-| Resume Reader | ✅ |
+| Resume Parsing | ✅ |
 | Skill Extraction | ✅ |
-| Resume Matching | 🚧 |
-| Easy Apply | 🚧 |
+| Resume Matching | ✅ |
+| AI Job Analysis | ✅ |
+| Missing Skills Detection | ✅ |
+| Best Job Recommendation | 🚧 |
+| Easy Apply Automation | 🚧 |
 
 ---
 
-# 📈 Future Enhancements
-
-- AI-powered job ranking
-- Skill gap analysis
-- Automatic Easy Apply
-- Recruiter message generation
-- Dashboard for tracking applications
-- Email notifications
-- Interview preparation suggestions
-
----
-
-# 🎯 Learning Outcomes
+# 🎯 Skills Demonstrated
 
 This project demonstrates practical experience with:
 
-- Browser Automation
-- Web Scraping
 - Python Programming
-- File Handling
+- Browser Automation
+- Playwright
 - Resume Parsing
-- Data Processing
+- Web Scraping
+- CSV Processing
+- File Handling
+- Software Design
 - Git & GitHub
-- Software Project Structure
+- AI-Based Resume Matching
+
+---
+
+# 📸 Screenshots
+
+> Screenshots will be added as the project progresses.
+
+```
+screenshots/
+│
+├── linkedin_jobs.png
+├── job_search.png
+├── job_details.png
+├── job_analysis.png
+└── resume_matching.png
+```
+
+---
+
+# 🛣️ Roadmap
+
+- AI Job Ranking
+- Skill Gap Analysis
+- One-Click Easy Apply
+- Resume Optimization
+- Recruiter Message Generator
+- Dashboard & Analytics
+- Email Notifications
+- Support for Multiple Job Portals
+
+---
+
+# 🤝 Contributing
+
+Contributions are welcome.
+
+1. Fork the repository
+2. Create a feature branch
+
+```bash
+git checkout -b feature-name
+```
+
+3. Commit your changes
+
+```bash
+git commit -m "Add new feature"
+```
+
+4. Push the branch
+
+```bash
+git push origin feature-name
+```
+
+5. Open a Pull Request
 
 ---
 
 # 👨‍💻 Author
 
-**G. Bhanu Prasad**
+## G. Bhanu Prasad
 
-Java Backend Developer | Python Automation Enthusiast
+**Java Backend Developer | Python Automation Enthusiast**
 
-GitHub:
+GitHub
+
 https://github.com/gbhanuprasad5261
 
-LinkedIn:
+LinkedIn
+
 https://www.linkedin.com/in/g-bhanu-prasad/
 
 ---
 
 # ⭐ Support
 
-If you found this project useful, consider giving it a **Star ⭐** on GitHub.
+If you found this project useful, please consider giving it a ⭐ on GitHub.
+
+It motivates me to build more open-source projects.
 
 ---
 
 # 📄 License
 
-This project is intended for educational and portfolio purposes.
+This project is licensed under the **MIT License**.
+
+---
+
+## 💡 Project Vision
+
+The long-term goal of this project is to build an intelligent AI-powered job assistant capable of searching jobs, analyzing resume compatibility, identifying skill gaps, generating personalized application materials, and automating suitable job applications while keeping the user in control of the process.
