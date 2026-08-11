@@ -35,10 +35,10 @@ resume_skills = {
 
 
 # ---------------------------------------
-# Skill Weights
+# Known Job Skills
 # ---------------------------------------
 
-skill_weights = {
+job_skill_weights = {
 
     # Core Java Backend
     "java": 10,
@@ -53,11 +53,33 @@ skill_weights = {
     "rest api": 8,
     "microservices": 10,
 
-    # Java Concepts
+    # Java concepts
     "oop": 5,
     "multithreading": 7,
+    "dsa": 5,
 
-    # Development Tools
+    # Databases
+    "mongodb": 6,
+    "postgresql": 6,
+    "redis": 6,
+
+    # Cloud
+    "aws": 8,
+    "azure": 7,
+    "gcp": 7,
+
+    # DevOps
+    "docker": 7,
+    "kubernetes": 8,
+    "jenkins": 5,
+    "ci/cd": 5,
+    "linux": 4,
+
+    # Messaging
+    "kafka": 7,
+    "rabbitmq": 6,
+
+    # Development tools
     "git": 3,
     "github": 2,
     "maven": 4,
@@ -67,37 +89,38 @@ skill_weights = {
     "junit": 4,
     "mockito": 4,
 
-    # Other technologies
-    "javalin": 3,
-    "spring mvc": 7,
-    "angular js basics": 2,
+    # Frontend
+    "javascript": 3,
+    "html": 2,
+    "css": 2,
+    "angular": 4,
+    "react": 4,
+
+    # Other languages
+    "python": 4,
 
     # Development practices
     "sdlc": 2,
-    "agile model": 2,
-    "waterfall model": 1,
-
-    # DSA
-    "dsa": 5,
+    "agile": 2,
+    "waterfall": 1,
 }
 
 
 # ---------------------------------------
-# Extract Skills
+# Extract Job Skills
 # ---------------------------------------
 
-def extract_skills(text):
+def extract_job_skills(text):
 
     text = text.lower()
 
     found = set()
 
-    for skill in resume_skills:
+    for skill in job_skill_weights:
 
         pattern = r"\b" + re.escape(skill) + r"\b"
 
         if re.search(pattern, text):
-
             found.add(skill)
 
     return found
@@ -109,25 +132,29 @@ def extract_skills(text):
 
 def match_resume(job_description):
 
-    job_skills = extract_skills(job_description)
+    job_skills = extract_job_skills(job_description)
 
     matched = resume_skills.intersection(job_skills)
 
     missing = job_skills - resume_skills
 
     # ---------------------------------------
-    # Calculate weighted score
+    # No skills detected
     # ---------------------------------------
 
     if not job_skills:
         return 0, matched, missing
+
+    # ---------------------------------------
+    # Weighted score
+    # ---------------------------------------
 
     total_weight = 0
     matched_weight = 0
 
     for skill in job_skills:
 
-        weight = skill_weights.get(
+        weight = job_skill_weights.get(
             skill,
             3
         )

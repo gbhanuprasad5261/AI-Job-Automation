@@ -8,6 +8,14 @@ from skill_matcher import match_resume
 INPUT_FILE = "data/job_details.csv"
 OUTPUT_FILE = "data/job_analysis.csv"
 
+# ---------------------------------------
+# Recommendation Settings
+# ---------------------------------------
+
+MIN_MATCH_SCORE = 60
+TOP_JOBS = 5
+EASY_APPLY_ONLY = False
+
 
 def analyze_jobs():
 
@@ -117,26 +125,52 @@ def analyze_jobs():
     print(f"Saved file    : {OUTPUT_FILE}")
 
     # ---------------------------------------
-    # TOP 3 JOB MATCHES
+    # Filter Jobs
     # ---------------------------------------
 
-    if jobs:
+    recommended_jobs = []
 
-        ranked_jobs = sorted(
-            jobs,
-            key=lambda x: int(
-                x["Match Score"].replace("%", "")
-            ),
-            reverse=True
+    for job in jobs:
+
+        score = int(
+            job["Match Score"].replace("%", "")
         )
 
-        print()
-        print("=" * 60)
-        print("TOP 3 JOB MATCHES")
-        print("=" * 60)
+        easy_apply = job["Easy Apply"].strip().lower()
+
+        if score < MIN_MATCH_SCORE:
+            continue
+
+        if EASY_APPLY_ONLY and easy_apply != "yes":
+            continue
+
+        recommended_jobs.append(job)
+
+    # ---------------------------------------
+    # Sort Recommendations
+    # ---------------------------------------
+
+    recommended_jobs = sorted(
+        recommended_jobs,
+        key=lambda x: int(
+            x["Match Score"].replace("%", "")
+        ),
+        reverse=True
+    )
+
+    # ---------------------------------------
+    # TOP RECOMMENDATIONS
+    # ---------------------------------------
+
+    print()
+    print("=" * 60)
+    print("TOP JOB RECOMMENDATIONS")
+    print("=" * 60)
+
+    if recommended_jobs:
 
         for index, job in enumerate(
-            ranked_jobs[:3],
+            recommended_jobs[:TOP_JOBS],
             start=1
         ):
 
@@ -157,77 +191,113 @@ def analyze_jobs():
             print(f"   Location: {job['Location']}")
             print(f"   Score   : {job['Match Score']}")
             print(f"   Priority: {priority}")
+            print(
+                f"   Easy Apply: "
+                f"{job['Easy Apply'] or 'Unknown'}"
+            )
 
             print(
                 f"   Missing : "
                 f"{job['Missing Skills'] or 'None'}"
             )
 
-        # ---------------------------------------
-        # SKILL GAP ANALYSIS
-        # ---------------------------------------
+    else:
 
-        skill_counter = Counter()
+        print(
+            f"\nNo jobs found with "
+            f"match score >= {MIN_MATCH_SCORE}%."
+        )
 
-        for job in jobs:
+    # ---------------------------------------
+    # Recommendation Summary
+    # ---------------------------------------
 
-            missing = job["Missing Skills"]
+    print()
+    print("=" * 60)
+    print("RECOMMENDATION SUMMARY")
+    print("=" * 60)
 
-            if missing:
+    print(
+        f"Minimum Match Score : "
+        f"{MIN_MATCH_SCORE}%"
+    )
 
-                skills = [
-                    skill.strip()
-                    for skill in missing.split(",")
-                    if skill.strip()
-                ]
+    print(
+        f"Easy Apply Only      : "
+        f"{EASY_APPLY_ONLY}"
+    )
 
-                skill_counter.update(skills)
+    print(
+        f"Recommended Jobs     : "
+        f"{len(recommended_jobs)}"
+    )
 
-        print()
-        print("=" * 60)
-        print("SKILL GAP ANALYSIS")
-        print("=" * 60)
+    # ---------------------------------------
+    # SKILL GAP ANALYSIS
+    # ---------------------------------------
 
-        if skill_counter:
+    skill_counter = Counter()
 
-            print()
-            print(
-                "Skills to improve based on "
-                "collected jobs:"
-            )
-            print()
+    for job in jobs:
 
-            for rank, (
-                skill,
-                count
-            ) in enumerate(
-                skill_counter.most_common(10),
-                start=1
-            ):
+        missing = job["Missing Skills"]
 
-                print(
-                    f"{rank}. {skill} -> "
-                    f"{count} job(s)"
-                )
+        if missing:
 
-            recommended = [
-                skill
-                for skill, count
-                in skill_counter.most_common(5)
+            skills = [
+                skill.strip()
+                for skill in missing.split(",")
+                if skill.strip()
             ]
 
-            print()
-            print("Recommended Focus:")
+            skill_counter.update(skills)
+
+    print()
+    print("=" * 60)
+    print("SKILL GAP ANALYSIS")
+    print("=" * 60)
+
+    if skill_counter:
+
+        print()
+        print(
+            "Skills to improve based on "
+            "collected jobs:"
+        )
+
+        print()
+
+        for rank, (
+            skill,
+            count
+        ) in enumerate(
+            skill_counter.most_common(10),
+            start=1
+        ):
+
             print(
-                ", ".join(recommended)
+                f"{rank}. {skill} -> "
+                f"{count} job(s)"
             )
 
-        else:
+        recommended = [
+            skill
+            for skill, count
+            in skill_counter.most_common(5)
+        ]
 
-            print()
-            print(
-                "No missing skills identified."
-            )
+        print()
+        print("Recommended Focus:")
+        print(
+            ", ".join(recommended)
+        )
+
+    else:
+
+        print()
+        print(
+            "No missing skills identified."
+        )
 
 
 if __name__ == "__main__":
