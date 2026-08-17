@@ -1,23 +1,17 @@
 import os
 import re
-from playwright.sync_api import Page
+from pathlib import Path
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
 # ============================================================
-# APPLICATION FORM AUTOMATION
+# CONFIGURATION
 # ============================================================
 
-# ------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------
-
-RESUME_PATH = os.path.abspath(
-    os.path.join("resume", "resume.pdf")
+RESUME_PATH = os.getenv(
+    "RESUME_PATH",
+    r"C:\Users\gbhan\Desktop\AI-Job-Automation\resume\resume.pdf"
 )
-
-# IMPORTANT:
-# Put your real details here if they are not already available
-# through your config.py / environment variables.
 
 APPLICANT_NAME = os.getenv(
     "APPLICANT_NAME",
@@ -25,12 +19,12 @@ APPLICANT_NAME = os.getenv(
 )
 
 EMAIL = os.getenv(
-    "APPLICANT_EMAIL",
+    "EMAIL",
     "gbhanuprasad1236@gmail.com"
 )
 
 PHONE = os.getenv(
-    "APPLICANT_PHONE",
+    "PHONE",
     "9392801041"
 )
 
@@ -39,910 +33,969 @@ YEARS_OF_EXPERIENCE = os.getenv(
     "0"
 )
 
-CITY = os.getenv(
-    "APPLICANT_CITY",
-    "Bengaluru"
-)
-
-COUNTRY = os.getenv(
-    "APPLICANT_COUNTRY",
-    "India"
-)
-
-# ------------------------------------------------------------
-# Safety switch
-# ------------------------------------------------------------
-# False = fill and navigate, but STOP before final submission.
-# True  = allow final Submit button to be clicked.
-#
-# Keep this FALSE during testing.
-
 AUTO_SUBMIT = False
 
 
 # ============================================================
-# Utility Functions
+# HELPERS
 # ============================================================
 
-def safe_text(element):
-
+def safe_inner_text(locator):
     try:
-        return element.inner_text().strip()
+        return locator.inner_text().strip()
     except Exception:
         return ""
 
 
-def safe_attribute(element, attribute):
-
+def safe_attribute(locator, attribute):
     try:
-        return element.get_attribute(attribute) or ""
+        return locator.get_attribute(attribute)
     except Exception:
-        return ""
+        return None
 
 
-def is_visible(element):
-
+def is_visible(locator):
     try:
-        return element.is_visible()
+        return locator.is_visible()
     except Exception:
         return False
 
 
-def fill_if_empty(locator, value):
+def normalize(text):
+    return re.sub(r"\s+", " ", text or "").strip().lower()
 
-    if not value:
+
+def is_resume_text(text):
+    """
+    Prevent LinkedIn resume choices from being detected
+    as application questions.
+    """
+
+    if not text:
         return False
 
-    try:
+    text_lower = normalize(text)
 
-        if locator.count() == 0:
-            return False
+    resume_extensions = (
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".rtf"
+    )
 
-        element = locator.first
+    resume_keywords = (
+        "resume",
+        "cv",
+        "bhanuprasad",
+        "bhanu prasad"
+    )
 
-        if not element.is_visible():
-            return False
-
-        current_value = ""
-
-        try:
-            current_value = element.input_value().strip()
-        except Exception:
-            pass
-
-        if current_value:
-            return True
-
-        element.fill(value)
-
+    if any(ext in text_lower for ext in resume_extensions):
         return True
 
-    except Exception:
-
-        return False
-
-
-# ============================================================
-# Detect Application Modal
-# ============================================================
-
-def get_application_container(page: Page):
-
-    # LinkedIn normally uses a dialog/modal for Easy Apply.
-
-    try:
-
-        dialogs = page.get_by_role("dialog")
-
-        if dialogs.count() > 0:
-
-            for i in range(dialogs.count()):
-
-                dialog = dialogs.nth(i)
-
-                if dialog.is_visible():
-                    return dialog
-
-    except Exception:
-        pass
-
-    # Fallback to page itself
-
-    return page
-
-
-# ============================================================
-# Print Application Status
-# ============================================================
-
-def print_application_status(page: Page):
-
-    try:
-
-        body = page.locator("body").inner_text()
-
-        match = re.search(
-            r"(\d+)\s*/\s*(\d+)",
-            body
-        )
-
-        if match:
-
-            current = match.group(1)
-            total = match.group(2)
-
-            print(
-                f"Application page: {current}/{total}"
-            )
-
-            return
-
-    except Exception:
-        pass
-
-    print("Application page: unknown")
-
-
-# ============================================================
-# Fill Name
-# ============================================================
-
-def fill_name(container):
-
-    print()
-    print("Checking name fields...")
-
-    selectors = [
-
-        "input[name*='firstName' i]",
-        "input[id*='firstName' i]",
-        "input[autocomplete='given-name']",
-        "input[name*='name' i]",
-        "input[id*='name' i]",
-
-    ]
-
-    # First name / last name handling
-
-    first_name = "G"
-    last_name = "Bhanu Prasad"
-
-    filled = False
-
-    for selector in selectors:
-
-        try:
-
-            locator = container.locator(selector)
-
-            if locator.count() == 0:
-                continue
-
-            for i in range(locator.count()):
-
-                element = locator.nth(i)
-
-                if not element.is_visible():
-                    continue
-
-                placeholder = safe_attribute(
-                    element,
-                    "placeholder"
-                ).lower()
-
-                name = safe_attribute(
-                    element,
-                    "name"
-                ).lower()
-
-                element_id = safe_attribute(
-                    element,
-                    "id"
-                ).lower()
-
-                combined = (
-                    placeholder
-                    + " "
-                    + name
-                    + " "
-                    + element_id
-                )
-
-                if "first" in combined:
-
-                    if fill_if_empty(
-                        element,
-                        first_name
-                    ):
-                        print("First name filled.")
-                        filled = True
-
-                elif "last" in combined:
-
-                    if fill_if_empty(
-                        element,
-                        last_name
-                    ):
-                        print("Last name filled.")
-                        filled = True
-
-        except Exception:
-            pass
-
-    return filled
-
-
-# ============================================================
-# Fill Email
-# ============================================================
-
-def fill_email(container):
-
-    print()
-    print("Checking email field...")
-
-    if not EMAIL:
-
-        print(
-            "EMAIL is empty."
-        )
-
-        print(
-            "Set APPLICANT_EMAIL before running."
-        )
-
-        return False
-
-    try:
-
-        locator = container.locator(
-            "input[type='email']"
-        )
-
-        if locator.count() > 0:
-
-            if fill_if_empty(
-                locator,
-                EMAIL
-            ):
-
-                print("Email filled.")
-                return True
-
-    except Exception:
-        pass
+    if any(word in text_lower for word in resume_keywords):
+        return True
 
     return False
 
 
 # ============================================================
-# Fill Phone
+# BASIC FIELD FILLING
 # ============================================================
 
-def select_india_country_code(container):
-    """
-    LinkedIn may render the phone country-code control as a custom
-    combobox/button instead of a native <select>.
+def fill_name_fields(page):
 
-    We only select India (+91). We do NOT guess any other country.
-    """
-    print()
-    print("Checking phone country code...")
+    print("\nChecking name fields...")
 
-    # Native select, if LinkedIn happens to expose one.
+    selectors = [
+        'input[name*="name" i]',
+        'input[id*="name" i]',
+        'input[autocomplete="name"]'
+    ]
+
+    for selector in selectors:
+
+        try:
+            fields = page.locator(selector)
+
+            for i in range(fields.count()):
+
+                field = fields.nth(i)
+
+                if not is_visible(field):
+                    continue
+
+                current = safe_attribute(field, "value")
+
+                if not current:
+                    field.fill(APPLICANT_NAME)
+                    print("Name filled.")
+
+        except Exception:
+            pass
+
+
+def fill_email_fields(page):
+
+    print("\nChecking email field...")
+
+    selectors = [
+        'input[type="email"]',
+        'input[name*="email" i]',
+        'input[id*="email" i]'
+    ]
+
+    for selector in selectors:
+
+        try:
+            fields = page.locator(selector)
+
+            for i in range(fields.count()):
+
+                field = fields.nth(i)
+
+                if not is_visible(field):
+                    continue
+
+                field.fill(EMAIL)
+                print("Email filled.")
+                return
+
+        except Exception:
+            pass
+
+
+def fill_phone_fields(page):
+
+    print("\nChecking phone field...")
+
+    selectors = [
+        'input[type="tel"]',
+        'input[name*="phone" i]',
+        'input[name*="mobile" i]',
+        'input[id*="phone" i]',
+        'input[id*="mobile" i]'
+    ]
+
+    for selector in selectors:
+
+        try:
+            fields = page.locator(selector)
+
+            for i in range(fields.count()):
+
+                field = fields.nth(i)
+
+                if not is_visible(field):
+                    continue
+
+                try:
+                    field.fill(PHONE)
+                    print("Phone filled.")
+                    return
+                except Exception:
+                    pass
+
+        except Exception:
+            pass
+
+
+# ============================================================
+# PHONE COUNTRY CODE
+# ============================================================
+
+def select_india_country_code(page):
+
+    print("\nChecking phone country code...")
+
+    # First try native select.
     try:
-        selects = container.locator("select")
+
+        selects = page.locator("select")
+
         for i in range(selects.count()):
+
             select = selects.nth(i)
 
-            try:
-                options = select.locator("option")
-                for j in range(options.count()):
-                    option = options.nth(j)
-                    text = safe_text(option)
-                    value = safe_attribute(option, "value")
+            if not is_visible(select):
+                continue
 
-                    if "India" in text and "+91" in text:
-                        select.select_option(value=value)
+            options = select.locator("option")
+
+            for j in range(options.count()):
+
+                option = options.nth(j)
+
+                text = safe_inner_text(option)
+
+                value = safe_attribute(option, "value")
+
+                if "+91" in text or "India" in text:
+
+                    try:
+                        if value:
+                            select.select_option(value=value)
+                        else:
+                            select.select_option(label=text)
+
                         print("Phone country code selected: India (+91)")
                         return True
-            except Exception:
-                continue
+
+                    except Exception:
+                        pass
+
     except Exception:
         pass
 
-    # Custom LinkedIn control.
-    candidate_selectors = [
-        "button[aria-label*='country' i]",
-        "button[aria-label*='phone' i]",
-        "[role='combobox'][aria-label*='country' i]",
-        "[role='combobox'][aria-label*='phone' i]",
-    ]
+    # LinkedIn often uses a custom combobox.
+    try:
 
-    for selector in candidate_selectors:
-        try:
-            controls = container.locator(selector)
+        combos = page.get_by_role("combobox")
 
-            for i in range(controls.count()):
-                control = controls.nth(i)
+        for i in range(combos.count()):
 
-                if not control.is_visible():
-                    continue
+            combo = combos.nth(i)
 
-                current = (
-                    safe_text(control)
-                    + " "
-                    + safe_attribute(control, "aria-label")
-                ).lower()
+            if not is_visible(combo):
+                continue
 
-                # If already India/+91, no action is necessary.
-                if "india" in current or "+91" in current:
-                    print("Phone country code already appears to be India (+91).")
-                    return True
+            text = safe_inner_text(combo)
 
-                control.click()
-                container.page.wait_for_timeout(500)
+            aria = safe_attribute(combo, "aria-label")
 
-                india = container.get_by_text(
-                    re.compile(r"^India\s*\(\+91\)$", re.IGNORECASE)
-                ).first
+            combined = normalize(f"{text} {aria}")
 
-                if india.count() > 0 and india.is_visible():
-                    india.click()
-                    container.page.wait_for_timeout(300)
-                    print("Phone country code selected: India (+91)")
-                    return True
+            if (
+                "country" in combined
+                or "phone" in combined
+                or "+91" in combined
+            ):
 
-        except Exception:
-            continue
+                try:
+                    combo.click()
+
+                    page.wait_for_timeout(500)
+
+                    india = page.get_by_text(
+                        re.compile(r"India.*\(\+91\)", re.I)
+                    ).last
+
+                    if is_visible(india):
+                        india.click()
+
+                        print(
+                            "Phone country code selected: India (+91)"
+                        )
+
+                        return True
+
+                except Exception:
+                    pass
+
+    except Exception:
+        pass
+
+    # Last attempt using visible text.
+    try:
+
+        india = page.get_by_text(
+            re.compile(r"India.*\(\+91\)", re.I)
+        ).last
+
+        if is_visible(india):
+
+            india.click()
+
+            print(
+                "Phone country code selected: India (+91)"
+            )
+
+            return True
+
+    except Exception:
+        pass
 
     print("Could not explicitly select India (+91).")
     print("Please verify the country code before submitting.")
+
     return False
 
 
-def fill_phone(container):
+# ============================================================
+# RESUME SELECTION
+# ============================================================
 
-    print()
-    print("Checking phone field...")
+def select_existing_resume(page):
 
-    if not PHONE:
+    print("\nChecking resume selection...")
 
-        print(
-            "PHONE is empty."
+    preferred_name = Path(RESUME_PATH).name.lower()
+
+    print("Preferred resume:", preferred_name)
+
+    # --------------------------------------------------------
+    # METHOD 1: FILE INPUT
+    # --------------------------------------------------------
+
+    try:
+
+        file_inputs = page.locator('input[type="file"]')
+
+        if file_inputs.count() > 0:
+
+            for i in range(file_inputs.count()):
+
+                file_input = file_inputs.nth(i)
+
+                if is_visible(file_input) or True:
+
+                    if Path(RESUME_PATH).exists():
+
+                        file_input.set_input_files(
+                            RESUME_PATH
+                        )
+
+                        print(
+                            "Resume uploaded:",
+                            RESUME_PATH
+                        )
+
+                        return True
+
+    except Exception as e:
+
+        print("File input upload not available:", e)
+
+    # --------------------------------------------------------
+    # METHOD 2: LINKEDIN EXISTING RESUME SELECTOR
+    # --------------------------------------------------------
+
+    print("Looking for existing LinkedIn resume selector...")
+
+    body_text = ""
+
+    try:
+        body_text = page.locator("body").inner_text()
+    except Exception:
+        pass
+
+    pdf_lines = []
+
+    for line in body_text.splitlines():
+
+        line_clean = line.strip()
+
+        if (
+            ".pdf" in line_clean.lower()
+            and len(line_clean) < 250
+        ):
+            pdf_lines.append(line_clean)
+
+    if pdf_lines:
+
+        print("Existing resumes detected:")
+
+        for resume in pdf_lines[:10]:
+            print(" -", resume)
+
+    # --------------------------------------------------------
+    # Try preferred resume first
+    # --------------------------------------------------------
+
+    preferred_stem = Path(
+        RESUME_PATH
+    ).stem.lower()
+
+    candidates = page.locator(
+        "text=/.*\\.pdf.*/i"
+    )
+
+    try:
+
+        count = candidates.count()
+
+        for i in range(count):
+
+            candidate = candidates.nth(i)
+
+            if not is_visible(candidate):
+                continue
+
+            text = safe_inner_text(candidate)
+
+            if not text:
+                continue
+
+            if preferred_stem in text.lower():
+
+                print(
+                    "Preferred resume found:",
+                    text
+                )
+
+                try:
+                    candidate.click()
+                    page.wait_for_timeout(500)
+
+                    print("Preferred resume selected.")
+                    return True
+
+                except Exception:
+                    pass
+
+    except Exception:
+        pass
+
+    # --------------------------------------------------------
+    # If preferred resume isn't found, select first PDF
+    # --------------------------------------------------------
+
+    try:
+
+        for i in range(candidates.count()):
+
+            candidate = candidates.nth(i)
+
+            if not is_visible(candidate):
+                continue
+
+            text = safe_inner_text(candidate)
+
+            if ".pdf" not in text.lower():
+                continue
+
+            print(
+                "Selecting available resume:",
+                text
+            )
+
+            try:
+
+                candidate.click()
+
+                page.wait_for_timeout(500)
+
+                print("Resume selected.")
+
+                return True
+
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+
+    # --------------------------------------------------------
+    # Try labels / buttons containing PDF
+    # --------------------------------------------------------
+
+    try:
+
+        elements = page.locator(
+            "label, button, [role='radio'], [role='option']"
         )
 
-        print(
-            "Set APPLICANT_PHONE before running."
-        )
+        for i in range(elements.count()):
 
-        return False
+            element = elements.nth(i)
 
-    # Country code is handled separately because LinkedIn often uses
-    # a custom control rather than a normal <select>.
-    select_india_country_code(container)
+            if not is_visible(element):
+                continue
 
+            text = safe_inner_text(element)
+
+            if ".pdf" not in text.lower():
+                continue
+
+            print(
+                "Resume option found:",
+                text
+            )
+
+            try:
+
+                element.click()
+
+                page.wait_for_timeout(500)
+
+                print("Resume option selected.")
+
+                return True
+
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+
+    print("No resume selector found on this page.")
+
+    return False
+
+
+# ============================================================
+# COMMON APPLICATION FIELDS
+# ============================================================
+
+def fill_common_fields(page):
+
+    print("\nChecking common application fields...")
+
+    # Experience
     selectors = [
-
-        "input[type='tel']",
-        "input[name*='phone' i]",
-        "input[id*='phone' i]",
-        "input[autocomplete='tel']",
-
+        'input[name*="experience" i]',
+        'input[id*="experience" i]',
+        'input[aria-label*="experience" i]'
     ]
 
     for selector in selectors:
 
         try:
 
-            locator = container.locator(selector)
+            fields = page.locator(selector)
 
-            if locator.count() == 0:
-                continue
+            for i in range(fields.count()):
 
-            if fill_if_empty(
-                locator,
-                PHONE
-            ):
+                field = fields.nth(i)
 
-                print("Phone filled.")
-                return True
+                if not is_visible(field):
+                    continue
 
-        except Exception:
-            pass
+                try:
 
-    return False
-
-
-# ============================================================
-# Upload Resume
-# ============================================================
-
-def upload_resume(container):
-
-    print()
-    print("Checking resume upload...")
-
-    if not os.path.exists(RESUME_PATH):
-
-        print(
-            f"Resume not found: {RESUME_PATH}"
-        )
-
-        return False
-
-    try:
-
-        file_inputs = container.locator(
-            "input[type='file']"
-        )
-
-        if file_inputs.count() == 0:
-
-            print(
-                "No file upload field found."
-            )
-
-            return False
-
-        for i in range(
-            file_inputs.count()
-        ):
-
-            element = file_inputs.nth(i)
-
-            if not element.is_visible():
-
-                # File inputs may be hidden.
-                # They can still accept set_input_files().
-                pass
-
-            try:
-
-                element.set_input_files(
-                    RESUME_PATH
-                )
-
-                print(
-                    "Resume uploaded:"
-                )
-
-                print(
-                    f"  {RESUME_PATH}"
-                )
-
-                return True
-
-            except Exception:
-                continue
-
-    except Exception as e:
-
-        print(
-            f"Resume upload error: {e}"
-        )
-
-    return False
-
-
-# ============================================================
-# Fill Common Text Fields
-# ============================================================
-
-def fill_common_text_fields(container):
-
-    print()
-    print(
-        "Checking common application fields..."
-    )
-
-    fields = container.locator(
-        "input, textarea"
-    )
-
-    filled_count = 0
-
-    for i in range(
-        fields.count()
-    ):
-
-        try:
-
-            element = fields.nth(i)
-
-            tag = element.evaluate(
-                "(el) => el.tagName"
-            )
-
-            if tag not in [
-                "INPUT",
-                "TEXTAREA"
-            ]:
-
-                continue
-
-            field_type = (
-                safe_attribute(
-                    element,
-                    "type"
-                ).lower()
-            )
-
-            if field_type in [
-                "hidden",
-                "file",
-                "radio",
-                "checkbox",
-                "submit",
-                "button"
-            ]:
-
-                continue
-
-            if not element.is_visible():
-
-                continue
-
-            current = ""
-
-            try:
-
-                current = (
-                    element
-                    .input_value()
-                    .strip()
-                )
-
-            except Exception:
-                pass
-
-            if current:
-
-                continue
-
-            placeholder = (
-                safe_attribute(
-                    element,
-                    "placeholder"
-                ).lower()
-            )
-
-            aria = (
-                safe_attribute(
-                    element,
-                    "aria-label"
-                ).lower()
-            )
-
-            name = (
-                safe_attribute(
-                    element,
-                    "name"
-                ).lower()
-            )
-
-            element_id = (
-                safe_attribute(
-                    element,
-                    "id"
-                ).lower()
-            )
-
-            combined = (
-                placeholder
-                + " "
-                + aria
-                + " "
-                + name
-                + " "
-                + element_id
-            )
-
-            # Years of experience
-
-            if (
-                "years of experience"
-                in combined
-                or "experience" in combined
-                and "years" in combined
-            ):
-
-                if fill_if_empty(
-                    element,
-                    YEARS_OF_EXPERIENCE
-                ):
+                    field.fill(
+                        str(YEARS_OF_EXPERIENCE)
+                    )
 
                     print(
                         "Filled experience:",
                         YEARS_OF_EXPERIENCE
                     )
 
-                    filled_count += 1
+                    return
 
-            # City
-
-            elif (
-                "city" in combined
-                or "location" in combined
-            ):
-
-                if fill_if_empty(
-                    element,
-                    CITY
-                ):
-
-                    print(
-                        "Filled location:",
-                        CITY
-                    )
-
-                    filled_count += 1
-
-        except Exception:
-            continue
-
-    return filled_count
-
-
-# ============================================================
-# Handle Radio Buttons
-# ============================================================
-
-def inspect_radio_buttons(container):
-
-    print()
-    print("Checking radio buttons...")
-
-    radios = container.locator(
-        "input[type='radio']"
-    )
-
-    if radios.count() == 0:
-
-        print(
-            "No radio buttons found."
-        )
-
-        return
-
-    print(
-        f"Radio buttons found: "
-        f"{radios.count()}"
-    )
-
-    for i in range(
-        radios.count()
-    ):
-
-        try:
-
-            radio = radios.nth(i)
-
-            print()
-            print(
-                f"RADIO {i + 1}"
-            )
-
-            print(
-                "Value:",
-                safe_attribute(
-                    radio,
-                    "value"
-                )
-            )
-
-            print(
-                "Name:",
-                safe_attribute(
-                    radio,
-                    "name"
-                )
-            )
-
-            print(
-                "Checked:",
-                radio.is_checked()
-            )
-
-            # Try to expose the associated visible label.
-            radio_id = safe_attribute(radio, "id")
-
-            if radio_id:
-                try:
-                    label = container.locator(
-                        f"label[for='{radio_id}']"
-                    ).first
-
-                    if label.count() > 0:
-                        print(
-                            "Label:",
-                            safe_text(label)
-                        )
                 except Exception:
                     pass
-
-            # Also inspect an ancestor label when present.
-            try:
-                parent_label = radio.locator(
-                    "xpath=ancestor::label[1]"
-                ).first
-
-                if parent_label.count() > 0:
-                    label_text = safe_text(parent_label)
-                    if label_text:
-                        print(
-                            "Parent label:",
-                            label_text
-                        )
-            except Exception:
-                pass
 
         except Exception:
             pass
 
-    print()
-    print(
-        "Radio answers were NOT guessed or changed."
-    )
-
 
 # ============================================================
-# Handle Checkboxes
+# RADIO BUTTONS
 # ============================================================
 
-def inspect_checkboxes(container):
+def inspect_radio_buttons(page):
 
-    print()
-    print(
-        "Checking checkboxes..."
-    )
+    print("\nChecking radio buttons...")
 
-    checkboxes = container.locator(
-        "input[type='checkbox']"
-    )
+    try:
 
-    if checkboxes.count() == 0:
-
-        print(
-            "No checkboxes found."
+        radios = page.locator(
+            'input[type="radio"]'
         )
 
-        return
+        count = radios.count()
 
-    print(
-        f"Checkboxes found: "
-        f"{checkboxes.count()}"
-    )
+        if count == 0:
 
-    for i in range(
-        checkboxes.count()
-    ):
+            print("No radio buttons found.")
+            return
 
-        try:
+        print(
+            f"Radio buttons found: {count}"
+        )
 
-            checkbox = checkboxes.nth(i)
+        for i in range(count):
 
-            if not checkbox.is_visible():
-                continue
+            radio = radios.nth(i)
 
-            print()
+            print(
+                f"\nRADIO {i + 1}"
+            )
+
+            print(
+                "Value:",
+                safe_attribute(radio, "value")
+            )
+
+            print(
+                "Name:",
+                safe_attribute(radio, "name")
+            )
+
+            print(
+                "Checked:",
+                safe_attribute(radio, "checked")
+            )
+
+        print(
+            "\nRadio answers were NOT guessed or changed."
+        )
+
+    except Exception:
+        print("Could not inspect radio buttons.")
+
+
+# ============================================================
+# CHECKBOXES
+# ============================================================
+
+def inspect_checkboxes(page):
+
+    print("\nChecking checkboxes...")
+
+    try:
+
+        boxes = page.locator(
+            'input[type="checkbox"]'
+        )
+
+        count = boxes.count()
+
+        if count == 0:
+
+            print("No checkboxes found.")
+            return
+
+        print(
+            f"Checkboxes found: {count}"
+        )
+
+        for i in range(count):
+
+            box = boxes.nth(i)
+
             print(
                 f"CHECKBOX {i + 1}"
             )
 
             print(
                 "Name:",
-                safe_attribute(
-                    checkbox,
-                    "name"
-                )
-            )
-
-            print(
-                "ID:",
-                safe_attribute(
-                    checkbox,
-                    "id"
-                )
+                safe_attribute(box, "name")
             )
 
             print(
                 "Checked:",
-                checkbox.is_checked()
+                safe_attribute(box, "checked")
             )
 
-        except Exception:
-            pass
-
-
-# ============================================================
-# Handle Selects
-# ============================================================
-
-def inspect_selects(container):
-
-    print()
-    print(
-        "Checking dropdowns..."
-    )
-
-    selects = container.locator(
-        "select"
-    )
-
-    if selects.count() == 0:
-
         print(
-            "No native dropdowns found."
+            "Checkbox answers were NOT guessed or changed."
         )
 
-        return
+    except Exception:
+        print("Could not inspect checkboxes.")
 
-    print(
-        f"Dropdowns found: "
-        f"{selects.count()}"
-    )
 
-    for i in range(
-        selects.count()
-    ):
+# ============================================================
+# DROPDOWNS
+# ============================================================
 
-        try:
+def inspect_dropdowns(page):
+
+    print("\nChecking dropdowns...")
+
+    try:
+
+        selects = page.locator("select")
+
+        count = selects.count()
+
+        if count == 0:
+
+            print("No native dropdowns found.")
+            return
+
+        print(
+            f"Dropdowns found: {count}"
+        )
+
+        for i in range(count):
 
             select = selects.nth(i)
 
-            if not select.is_visible():
-                continue
-
-            print()
             print(
-                f"DROPDOWN {i + 1}"
+                f"\nDROPDOWN {i + 1}"
             )
 
             print(
                 "Name:",
-                safe_attribute(
-                    select,
-                    "name"
-                )
+                safe_attribute(select, "name")
             )
 
             print(
                 "ID:",
-                safe_attribute(
-                    select,
-                    "id"
-                )
+                safe_attribute(select, "id")
             )
 
-            options = select.locator(
-                "option"
-            )
+            options = select.locator("option")
 
-            for j in range(
-                min(options.count(), 15)
-            ):
+            for j in range(min(options.count(), 15)):
 
                 option = options.nth(j)
 
                 print(
                     "  -",
-                    safe_text(option)
+                    safe_inner_text(option)
                 )
 
-        except Exception:
-            pass
+    except Exception:
+        print("Could not inspect dropdowns.")
 
 
 # ============================================================
-# Inspect Required Fields
+# APPLICATION QUESTION DETECTION
 # ============================================================
 
-def inspect_required_fields(container):
+def detect_questions(page):
 
-    print()
     print(
-        "=" * 70
+        "\n======================================================================"
+    )
+
+    print(
+        "APPLICATION QUESTION DETECTION"
+    )
+
+    print(
+        "======================================================================"
+    )
+
+    questions = []
+
+    # --------------------------------------------------------
+    # Text-based detection
+    # --------------------------------------------------------
+
+    try:
+
+        candidates = page.locator(
+            "label, legend"
+        )
+
+        for i in range(candidates.count()):
+
+            element = candidates.nth(i)
+
+            if not is_visible(element):
+                continue
+
+            text = safe_inner_text(element)
+
+            if not text:
+                continue
+
+            # IMPORTANT:
+            # Resume filenames are NOT questions.
+            if is_resume_text(text):
+                continue
+
+            questions.append(text)
+
+    except Exception:
+        pass
+
+    # --------------------------------------------------------
+    # Remove duplicates
+    # --------------------------------------------------------
+
+    unique_questions = []
+
+    for question in questions:
+
+        normalized = normalize(question)
+
+        if not normalized:
+            continue
+
+        if normalized not in [
+            normalize(q)
+            for q in unique_questions
+        ]:
+
+            unique_questions.append(question)
+
+    if not unique_questions:
+
+        print(
+            "\nNo application questions detected."
+        )
+
+        return []
+
+    for index, question in enumerate(
+        unique_questions,
+        start=1
+    ):
+
+        print(
+            f"\nQUESTION {index}"
+        )
+
+        print("-" * 50)
+
+        print(question)
+
+    print(
+        f"\nQUESTIONS FOUND: {len(unique_questions)}"
+    )
+
+    return unique_questions
+
+
+# ============================================================
+# FILL KNOWN EXPERIENCE QUESTIONS
+# ============================================================
+
+def fill_known_experience_questions(page):
+    """
+    Fill experience questions whose answer is explicitly configured.
+    This project uses 0 years for Java experience.
+    """
+
+    print("\nChecking known experience questions...")
+
+    selectors = [
+        'input[aria-label*="experience" i]',
+        'input[name*="experience" i]',
+        'input[id*="experience" i]',
+    ]
+
+    filled = False
+
+    for selector in selectors:
+        try:
+            fields = page.locator(selector)
+
+            for i in range(fields.count()):
+                field = fields.nth(i)
+
+                if not is_visible(field):
+                    continue
+
+                aria = safe_attribute(field, "aria-label") or ""
+                name = safe_attribute(field, "name") or ""
+                field_id = safe_attribute(field, "id") or ""
+
+                combined = normalize(
+                    f"{aria} {name} {field_id}"
+                )
+
+                if "experience" not in combined:
+                    continue
+
+                current = safe_attribute(field, "value") or ""
+
+                if current.strip():
+                    print(
+                        f"Experience already filled: {current}"
+                    )
+                    filled = True
+                    continue
+
+                field.fill(str(YEARS_OF_EXPERIENCE))
+
+                print(
+                    f"Filled experience question with: "
+                    f"{YEARS_OF_EXPERIENCE}"
+                )
+
+                filled = True
+
+        except Exception:
+            continue
+
+    if not filled:
+        print("No known experience question found.")
+
+    return filled
+
+
+# ============================================================
+# CLOSE BLOCKING DIALOGS
+# ============================================================
+
+def close_blocking_dialogs(page):
+    """
+    Close visible non-application dialogs that can block Next.
+    """
+
+    print("\nChecking for blocking dialogs...")
+
+    closed = False
+
+    try:
+        dialogs = page.locator('[role="dialog"]')
+
+        for i in range(dialogs.count()):
+            dialog = dialogs.nth(i)
+
+            if not is_visible(dialog):
+                continue
+
+            dialog_text = normalize(
+                safe_inner_text(dialog)
+            )
+
+            # Never close the actual Easy Apply form.
+            if (
+                "application" in dialog_text
+                or "easy apply" in dialog_text
+            ):
+                continue
+
+            close_selectors = [
+                'button[aria-label*="close" i]',
+                'button[aria-label*="dismiss" i]',
+                '[role="button"][aria-label*="close" i]',
+                '[role="button"][aria-label*="dismiss" i]',
+            ]
+
+            for selector in close_selectors:
+                try:
+                    buttons = dialog.locator(selector)
+
+                    for j in range(buttons.count()):
+                        button = buttons.nth(j)
+
+                        if not is_visible(button):
+                            continue
+
+                        button.click(timeout=3000)
+                        page.wait_for_timeout(500)
+
+                        print("Closed blocking dialog.")
+
+                        closed = True
+                        break
+
+                    if closed:
+                        break
+
+                except Exception:
+                    continue
+
+            if closed:
+                break
+
+    except Exception:
+        pass
+
+    if not closed:
+        print("No blocking dialog detected.")
+
+    return closed
+
+
+# ============================================================
+# REQUIRED FIELD CHECK
+# ============================================================
+
+def check_required_fields(page):
+
+    print(
+        "\n======================================================================"
     )
 
     print(
@@ -950,269 +1003,127 @@ def inspect_required_fields(container):
     )
 
     print(
-        "=" * 70
+        "======================================================================"
     )
 
-    required = container.locator(
-        "[required]"
-    )
-
-    print(
-        f"Required elements found: "
-        f"{required.count()}"
-    )
-
-    unanswered = 0
-
-    for i in range(
-        required.count()
-    ):
-
-        try:
-
-            element = required.nth(i)
-
-            tag = element.evaluate(
-                "(el) => el.tagName"
-            )
-
-            field_type = (
-                safe_attribute(
-                    element,
-                    "type"
-                ).lower()
-            )
-
-            if field_type in [
-                "hidden"
-            ]:
-
-                continue
-
-            # Radio groups: consider the group answered when any
-            # radio in the same name group is checked.
-            if field_type == "radio":
-
-                group_name = safe_attribute(
-                    element,
-                    "name"
-                )
-
-                if group_name:
-                    try:
-                        checked = container.locator(
-                            f"input[type='radio'][name='{group_name}']:checked"
-                        )
-
-                        if checked.count() > 0:
-                            continue
-                    except Exception:
-                        pass
-
-                if element.is_checked():
-                    continue
-
-            # Checkbox: required means it must be checked.
-            if field_type == "checkbox":
-
-                if element.is_checked():
-                    continue
-
-                value = ""
-            else:
-
-                value = ""
-
-                try:
-
-                    value = (
-                        element
-                        .input_value()
-                        .strip()
-                    )
-
-                except Exception:
-                    pass
-
-                # Native select.
-                if tag == "SELECT":
-                    try:
-                        value = (
-                            element
-                            .input_value()
-                            .strip()
-                        )
-                    except Exception:
-                        pass
-
-            if not value:
-
-                unanswered += 1
-
-                print()
-                print(
-                    f"REQUIRED FIELD "
-                    f"{unanswered}"
-                )
-
-                print(
-                    "Tag:",
-                    tag
-                )
-
-                print(
-                    "Type:",
-                    field_type
-                )
-
-                print(
-                    "Name:",
-                    safe_attribute(
-                        element,
-                        "name"
-                    )
-                )
-
-                print(
-                    "ID:",
-                    safe_attribute(
-                        element,
-                        "id"
-                    )
-                )
-
-                print(
-                    "Placeholder:",
-                    safe_attribute(
-                        element,
-                        "placeholder"
-                    )
-                )
-
-                print(
-                    "Aria:",
-                    safe_attribute(
-                        element,
-                        "aria-label"
-                    )
-                )
-
-        except Exception:
-            pass
-
-    print()
-
-    if unanswered == 0:
-
-        print(
-            "No empty required fields detected."
-        )
-
-    else:
-
-        print(
-            f"Empty required fields: "
-            f"{unanswered}"
-        )
-
-    return unanswered
-
-
-# ============================================================
-# Find Next Button
-# ============================================================
-
-def find_next_button(container):
-
-    names = [
-        "Next",
-        "Continue",
-        "Review",
-    ]
-
-    for name in names:
-
-        try:
-
-            button = container.get_by_role(
-                "button",
-                name=re.compile(
-                    f"^{re.escape(name)}$",
-                    re.IGNORECASE
-                )
-            ).first
-
-            if button.count() > 0:
-
-                if button.is_visible():
-
-                    return button
-
-        except Exception:
-            pass
-
-    # Fallback
+    empty_required = []
 
     try:
 
-        buttons = container.locator(
-            "button"
+        required = page.locator(
+            "[required]"
         )
 
-        for i in range(
-            buttons.count()
-        ):
+        count = required.count()
 
-            button = buttons.nth(i)
+        print(
+            f"Required elements found: {count}"
+        )
 
-            if not button.is_visible():
+        for i in range(count):
+
+            field = required.nth(i)
+
+            if not is_visible(field):
                 continue
 
-            text = safe_text(
-                button
-            ).lower()
+            value = safe_attribute(
+                field,
+                "value"
+            )
 
-            if text in [
-                "next",
-                "continue",
-                "review"
-            ]:
+            if value is None:
+                value = ""
 
-                return button
+            if not value.strip():
+
+                empty_required.append(
+                    field
+                )
+
+        if empty_required:
+
+            print(
+                f"Empty required fields: {len(empty_required)}"
+            )
+
+        else:
+
+            print(
+                "\nNo empty required fields detected."
+            )
 
     except Exception:
-        pass
+        print(
+            "Could not inspect required fields."
+        )
 
-    return None
+    return empty_required
 
 
 # ============================================================
-# Find Submit Button
+# FIND NEXT / REVIEW / SUBMIT
 # ============================================================
 
-def find_submit_button(container):
+def find_next_button(page):
 
     patterns = [
-        r"submit application",
-        r"submit",
-        r"send application"
+        r"Next",
+        r"Continue",
+        r"Review",
+        r"Next:.*",
     ]
 
     for pattern in patterns:
 
         try:
 
-            button = container.get_by_role(
+            buttons = page.get_by_role(
                 "button",
                 name=re.compile(
                     pattern,
-                    re.IGNORECASE
+                    re.I
                 )
-            ).first
+            )
 
-            if button.count() > 0:
+            for i in range(buttons.count()):
 
-                if button.is_visible():
+                button = buttons.nth(i)
+
+                if is_visible(button):
+
+                    return button
+
+        except Exception:
+            pass
+
+    return None
+
+
+def find_submit_button(page):
+
+    patterns = [
+        r"Submit application",
+        r"Submit"
+    ]
+
+    for pattern in patterns:
+
+        try:
+
+            buttons = page.get_by_role(
+                "button",
+                name=re.compile(
+                    pattern,
+                    re.I
+                )
+            )
+
+            for i in range(buttons.count()):
+
+                button = buttons.nth(i)
+
+                if is_visible(button):
 
                     return button
 
@@ -1223,48 +1134,13 @@ def find_submit_button(container):
 
 
 # ============================================================
-# Detect Closed Job
+# PROCESS CURRENT APPLICATION PAGE
 # ============================================================
 
-def job_is_closed(page):
+def prepare_application_page(page):
 
-    try:
-
-        body = page.locator(
-            "body"
-        ).inner_text().lower()
-
-        closed_messages = [
-
-            "no longer accepting applications",
-            "job is no longer accepting applications",
-            "this job is no longer available",
-            "applications are closed",
-            "job has been closed"
-
-        ]
-
-        for message in closed_messages:
-
-            if message in body:
-
-                return True
-
-    except Exception:
-        pass
-
-    return False
-
-
-# ============================================================
-# Prepare Current Application Page
-# ============================================================
-
-def prepare_current_page(page: Page):
-
-    print()
     print(
-        "=" * 70
+        "\n======================================================================"
     )
 
     print(
@@ -1272,239 +1148,74 @@ def prepare_current_page(page: Page):
     )
 
     print(
-        "=" * 70
+        "======================================================================"
     )
 
-    print_application_status(page)
+    try:
 
-    container = get_application_container(
-        page
-    )
+        page_number = page.locator(
+            "text=/\\d+\\/\\d+ pages/i"
+        ).first.inner_text()
+
+        print(
+            "Application page:",
+            page_number
+        )
+
+    except Exception:
+
+        print(
+            "Application page: unknown"
+        )
 
     # --------------------------------------------------------
-    # Contact information
+    # Basic fields
     # --------------------------------------------------------
 
-    fill_name(
-        container
-    )
+    print("\nChecking name fields...")
+    fill_name_fields(page)
 
-    fill_email(
-        container
-    )
+    print("\nChecking email field...")
+    fill_email_fields(page)
 
-    fill_phone(
-        container
-    )
+    print("\nChecking phone field...")
+    fill_phone_fields(page)
+
+    select_india_country_code(page)
 
     # --------------------------------------------------------
     # Resume
     # --------------------------------------------------------
 
-    upload_resume(
-        container
-    )
+    select_existing_resume(page)
 
     # --------------------------------------------------------
-    # Common fields
+    # Other fields
     # --------------------------------------------------------
 
-    fill_common_text_fields(
-        container
-    )
+    fill_common_fields(page)
 
-    # --------------------------------------------------------
-    # Other controls
-    # --------------------------------------------------------
+    inspect_radio_buttons(page)
 
-    inspect_radio_buttons(
-        container
-    )
+    inspect_checkboxes(page)
 
-    inspect_checkboxes(
-        container
-    )
+    inspect_dropdowns(page)
 
-    inspect_selects(
-        container
-    )
+    detect_questions(page)
 
-    # --------------------------------------------------------
-    # Required fields
-    # --------------------------------------------------------
+    empty_required = check_required_fields(page)
 
-    unanswered = (
-        inspect_required_fields(
-            container
-        )
-    )
-
-    return unanswered
+    return empty_required
 
 
 # ============================================================
-# Move To Next Page
+# MAIN AUTOMATION FUNCTION
 # ============================================================
 
-def move_to_next_page(page: Page):
-
-    container = get_application_container(
-        page
-    )
-
-    button = find_next_button(
-        container
-    )
-
-    if button is None:
-
-        print()
-        print(
-            "Next/Continue/Review button "
-            "not found."
-        )
-
-        return False
-
-    try:
-
-        print()
-        print(
-            "Next button found."
-        )
-
-        button.scroll_into_view_if_needed()
-
-        page.wait_for_timeout(
-            500
-        )
-
-        button.click()
-
-        page.wait_for_timeout(
-            2000
-        )
-
-        print(
-            "Moved to next application page."
-        )
-
-        return True
-
-    except Exception as e:
-
-        print(
-            f"Could not move to next page: {e}"
-        )
-
-        return False
-
-
-# ============================================================
-# Final Review / Submit
-# ============================================================
-
-def handle_final_submission(page: Page):
-
-    print()
-    print(
-        "=" * 70
-    )
+def inspect_and_prepare_form(page):
 
     print(
-        "FINAL APPLICATION REVIEW"
-    )
-
-    print(
-        "=" * 70
-    )
-
-    container = get_application_container(
-        page
-    )
-
-    submit_button = find_submit_button(
-        container
-    )
-
-    if submit_button is None:
-
-        print(
-            "Submit button not found."
-        )
-
-        return False
-
-    print(
-        "Submit button found."
-    )
-
-    if not AUTO_SUBMIT:
-
-        print()
-        print(
-            "AUTO_SUBMIT = False"
-        )
-
-        print(
-            "Application will NOT be submitted."
-        )
-
-        print(
-            "Review the application manually."
-        )
-
-        return False
-
-    # Even when AUTO_SUBMIT is enabled, require the submit button to be
-    # visible and enabled. We do not bypass LinkedIn's final UI.
-    try:
-        if not submit_button.is_visible():
-            print("Submit button is not visible. Stopping.")
-            return False
-
-        if not submit_button.is_enabled():
-            print("Submit button is disabled. Stopping.")
-            return False
-    except Exception as e:
-        print(f"Could not verify submit button state: {e}")
-        return False
-
-    try:
-
-        submit_button.click()
-
-        page.wait_for_timeout(
-            3000
-        )
-
-        print()
-        print(
-            "APPLICATION SUBMITTED"
-        )
-
-        return True
-
-    except Exception as e:
-
-        print(
-            f"Could not submit application: {e}"
-        )
-
-        return False
-
-
-# ============================================================
-# Main Application Automation
-# ============================================================
-
-def inspect_and_prepare_form(
-    page: Page
-):
-
-    print()
-    print(
-        "=" * 70
+        "\n======================================================================"
     )
 
     print(
@@ -1512,21 +1223,11 @@ def inspect_and_prepare_form(
     )
 
     print(
-        "=" * 70
+        "======================================================================"
     )
 
-    if job_is_closed(page):
-
-        print()
-        print(
-            "JOB IS CLOSED."
-        )
-
-        return False
-
-    print()
     print(
-        "Resume:",
+        "\nResume:",
         RESUME_PATH
     )
 
@@ -1535,100 +1236,102 @@ def inspect_and_prepare_form(
         AUTO_SUBMIT
     )
 
-    # --------------------------------------------------------
-    # Process multiple application pages
-    # --------------------------------------------------------
+    page_number = 1
 
-    max_pages = 10
+    max_pages = 8
 
-    for page_number in range(
-        1,
-        max_pages + 1
-    ):
+    while page_number <= max_pages:
 
-        print()
         print(
-            "=" * 70
+            "\n======================================================================"
         )
 
         print(
-            f"PROCESSING APPLICATION PAGE "
-            f"{page_number}"
+            f"PROCESSING APPLICATION PAGE {page_number}"
         )
 
         print(
-            "=" * 70
+            "======================================================================"
         )
 
-        if job_is_closed(page):
+        page.wait_for_timeout(800)
 
-            print(
-                "Job/application is closed."
-            )
-
-            return False
-
-        unanswered = (
-            prepare_current_page(
-                page
-            )
-        )
+        prepare_application_page(page)
 
         # ----------------------------------------------------
-        # If required fields remain unanswered
+        # Check submit button
         # ----------------------------------------------------
 
-        if unanswered > 0:
+        submit_button = find_submit_button(page)
 
-            print()
+        if submit_button:
+
             print(
-                "REQUIRED INFORMATION IS MISSING."
+                "\nFinal application page detected."
             )
 
             print(
-                "Automation will stop here."
+                "\n======================================================================"
             )
 
             print(
-                "Please inspect the fields above."
+                "FINAL APPLICATION REVIEW"
             )
 
-            return False
-
-        # ----------------------------------------------------
-        # Check if Submit is already available
-        # ----------------------------------------------------
-
-        container = get_application_container(
-            page
-        )
-
-        submit_button = find_submit_button(
-            container
-        )
-
-        if submit_button is not None:
-
-            print()
             print(
-                "Final application page detected."
+                "======================================================================"
             )
 
-            return handle_final_submission(
-                page
+            print(
+                "Submit button found."
             )
 
+            if AUTO_SUBMIT:
+
+                print(
+                    "\nAUTO_SUBMIT = True"
+                )
+
+                print(
+                    "Submitting application..."
+                )
+
+                submit_button.click()
+
+                page.wait_for_timeout(3000)
+
+                print(
+                    "Application submitted."
+                )
+
+            else:
+
+                print(
+                    "\nAUTO_SUBMIT = False"
+                )
+
+                print(
+                    "Application will NOT be submitted."
+                )
+
+                print(
+                    "Review the application manually."
+                )
+
+            break
+
         # ----------------------------------------------------
-        # Move to next page
+        # Find next button
         # ----------------------------------------------------
 
-        moved = move_to_next_page(
-            page
-        )
+        next_button = find_next_button(page)
 
-        if not moved:
+        if not next_button:
 
-            print()
+            print(
+                "\nNext/Continue/Review button not found."
+            )
+
             print(
                 "Could not find another page."
             )
@@ -1637,50 +1340,84 @@ def inspect_and_prepare_form(
                 "Stopping automation."
             )
 
-            return False
+            break
 
-        page.wait_for_timeout(
-            1500
-        )
+        try:
 
-    print()
+            close_blocking_dialogs(page)
+
+            page.wait_for_timeout(300)
+
+            next_button.scroll_into_view_if_needed()
+
+            next_button.click(
+                timeout=10000
+            )
+
+            page.wait_for_timeout(1200)
+
+            print(
+                "\nMoved to next application page."
+            )
+
+            page_number += 1
+
+        except Exception as e:
+
+            print(
+                "\nNormal Next click failed:"
+            )
+
+            print(e)
+
+            try:
+
+                close_blocking_dialogs(page)
+
+                if is_visible(next_button):
+
+                    next_button.click(
+                        force=True,
+                        timeout=5000
+                    )
+
+                    page.wait_for_timeout(1200)
+
+                    print(
+                        "\nMoved to next application page "
+                        "using fallback click."
+                    )
+
+                    page_number += 1
+
+                else:
+
+                    print(
+                        "Next button is no longer visible."
+                    )
+
+                    break
+
+            except Exception as fallback_error:
+
+                print(
+                    "Fallback Next click failed:"
+                )
+
+                print(fallback_error)
+
+                break
+
     print(
-        "Maximum application pages reached."
+        "\n======================================================================"
     )
 
     print(
-        "Stopping automation for safety."
-    )
-
-    return False
-
-
-# ============================================================
-# End
-# ============================================================
-
-if __name__ == "__main__":
-
-    print()
-    print(
-        "=" * 70
+        "READY FOR APPLICATION AUTOMATION"
     )
 
     print(
-        "APPLICATION FORM MODULE"
+        "======================================================================"
     )
 
-    print(
-        "=" * 70
-    )
-
-    print()
-    print(
-        "This module is called by easy_apply.py."
-    )
-
-    print(
-        "Run easy_apply.py to start the application."
-    )
-
-    print()
+    return True
