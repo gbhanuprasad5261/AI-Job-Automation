@@ -688,217 +688,102 @@ def fill_common_text_fields(container):
 # Handle Radio Buttons
 # ============================================================
 
-def _radio_label_text(container, radio):
-    """Return the most useful visible answer label for a radio input."""
-    radio_id = safe_attribute(radio, "id")
-
-    if radio_id:
-        try:
-            label = container.locator(f"label[for='{radio_id}']").first
-            if label.count() > 0:
-                text = safe_text(label)
-                if text:
-                    return text
-        except Exception:
-            pass
-
-    try:
-        parent = radio.locator("xpath=ancestor::label[1]").first
-        if parent.count() > 0:
-            text = safe_text(parent)
-            if text:
-                return text
-    except Exception:
-        pass
-
-    try:
-        # LinkedIn sometimes puts the visible answer text in a sibling/span.
-        text = radio.locator("xpath=following-sibling::*[1]").first.inner_text().strip()
-        if text:
-            return text
-    except Exception:
-        pass
-
-    return ""
-
-
-def _radio_question_text(container, radio):
-    """Find nearby text that represents the question for a radio group."""
-    try:
-        fieldset = radio.locator("xpath=ancestor::fieldset[1]").first
-        if fieldset.count() > 0:
-            legend = fieldset.locator("legend").first
-            if legend.count() > 0:
-                text = safe_text(legend)
-                if text:
-                    return text
-            text = safe_text(fieldset)
-            if text:
-                return text
-    except Exception:
-        pass
-
-    # Walk upward through a few likely LinkedIn question containers.
-    for xpath in [
-        "xpath=ancestor::*[self::div or self::li][.//input[@type='radio']][1]",
-        "xpath=ancestor::*[self::div or self::section][.//input[@type='radio']][1]",
-    ]:
-        try:
-            parent = radio.locator(xpath).first
-            if parent.count() == 0:
-                continue
-            text = safe_text(parent)
-            if text:
-                # Keep it bounded so debug output remains readable.
-                return text[:1200]
-        except Exception:
-            continue
-
-    return ""
-
-
-def _choose_safe_radio_answer(question, answers):
-    """Return a safe answer label for common factual application questions.
-
-    We only answer questions that can be derived from this applicant's configured
-    profile. Unknown questions are deliberately left unresolved.
-    """
-    q = (question or "").lower()
-    normalized = [(a, (a or "").strip().lower()) for a in answers]
-
-    def find(*terms):
-        for label, low in normalized:
-            if all(term in low for term in terms):
-                return label
-        return None
-
-    # Work authorization / sponsorship questions.
-    if any(x in q for x in [
-        "authorized to work", "legally authorized", "right to work",
-        "eligible to work", "work authorization"
-    ]):
-        if any(x in q for x in ["sponsor", "sponsorship", "visa"]):
-            return find("no") or find("not")
-        return find("yes")
-
-    if any(x in q for x in [
-        "require sponsorship", "need sponsorship", "future sponsorship",
-        "visa sponsorship"
-    ]):
-        return find("no") or find("not")
-
-    # Experience questions.  The configured value is 0, so only select an
-    # exact zero/entry-level answer; never fabricate experience.
-    if any(x in q for x in [
-        "years of experience", "years experience", "professional experience"
-    ]):
-        for label, low in normalized:
-            if re.search(r"(^|\D)0(\D|$)", low) or "no experience" in low or "fresher" in low:
-                return label
-
-    return None
-
-
 def inspect_radio_buttons(container):
-    """Inspect radio groups and safely answer only known questions.
 
-    Returns the number of unresolved radio groups. A non-zero value prevents
-    navigation/submission so the automation never guesses an application answer.
-    """
     print()
     print("Checking radio buttons...")
 
-    radios = container.locator("input[type='radio']")
-    total = radios.count()
+    radios = container.locator(
+        "input[type='radio']"
+    )
 
-    if total == 0:
-        print("No radio buttons found.")
-        return 0
+    if radios.count() == 0:
 
-    # Group by name; LinkedIn normally gives all answers in a question the same name.
-    groups = {}
-    unnamed = []
+        print(
+            "No radio buttons found."
+        )
 
-    for i in range(total):
+        return
+
+    print(
+        f"Radio buttons found: "
+        f"{radios.count()}"
+    )
+
+    for i in range(
+        radios.count()
+    ):
+
         try:
+
             radio = radios.nth(i)
-            if not radio.is_visible():
-                continue
-            name = safe_attribute(radio, "name").strip()
-            if name:
-                groups.setdefault(name, []).append(radio)
-            else:
-                unnamed.append(radio)
-        except Exception:
-            continue
-
-    for radio in unnamed:
-        groups.setdefault(f"__unnamed_{len(groups)}", []).append(radio)
-
-    unresolved = 0
-
-    print(f"Radio groups found: {len(groups)}")
-
-    for group_index, group in enumerate(groups.values(), start=1):
-        try:
-            first = group[0]
-            question = _radio_question_text(container, first)
-            answers = [_radio_label_text(container, r) for r in group]
-            answers = [a for a in answers if a]
 
             print()
-            print(f"RADIO GROUP {group_index}")
-            print("Question:", question or "Unknown")
-            print("Answers:")
-            for n, answer in enumerate(answers, start=1):
-                print(f"  {n}. {answer}")
+            print(
+                f"RADIO {i + 1}"
+            )
 
-            chosen = _choose_safe_radio_answer(question, answers)
+            print(
+                "Value:",
+                safe_attribute(
+                    radio,
+                    "value"
+                )
+            )
 
-            if chosen:
-                # Find the actual radio whose label matched the chosen answer.
-                clicked = False
-                for radio in group:
-                    label = _radio_label_text(container, radio)
-                    if label.strip().lower() == chosen.strip().lower():
-                        try:
-                            radio.check(force=True)
-                            clicked = True
-                            break
-                        except Exception:
-                            try:
-                                radio.click(force=True)
-                                clicked = True
-                                break
-                            except Exception:
-                                pass
+            print(
+                "Name:",
+                safe_attribute(
+                    radio,
+                    "name"
+                )
+            )
 
-                if clicked:
-                    print("Selected safe answer:", chosen)
-                    continue
+            print(
+                "Checked:",
+                radio.is_checked()
+            )
 
-            # Never accept an unexplained/default checked answer as a safe answer.
-            checked = any(radio.is_checked() for radio in group)
-            if checked:
-                print("WARNING: A radio option is already selected, but the question was not safely recognized.")
-            else:
-                print("WARNING: No radio option selected.")
+            # Try to expose the associated visible label.
+            radio_id = safe_attribute(radio, "id")
 
-            print("This radio question requires manual review.")
-            unresolved += 1
+            if radio_id:
+                try:
+                    label = container.locator(
+                        f"label[for='{radio_id}']"
+                    ).first
 
-        except Exception as e:
-            print(f"Could not inspect radio group: {e}")
-            unresolved += 1
+                    if label.count() > 0:
+                        print(
+                            "Label:",
+                            safe_text(label)
+                        )
+                except Exception:
+                    pass
+
+            # Also inspect an ancestor label when present.
+            try:
+                parent_label = radio.locator(
+                    "xpath=ancestor::label[1]"
+                ).first
+
+                if parent_label.count() > 0:
+                    label_text = safe_text(parent_label)
+                    if label_text:
+                        print(
+                            "Parent label:",
+                            label_text
+                        )
+            except Exception:
+                pass
+
+        except Exception:
+            pass
 
     print()
-    if unresolved == 0:
-        print("All radio questions were answered safely.")
-    else:
-        print(f"Unresolved radio groups: {unresolved}")
-        print("Automation will stop before continuing.")
-
-    return unresolved
+    print(
+        "Radio answers were NOT guessed or changed."
+    )
 
 
 # ============================================================
@@ -1047,6 +932,100 @@ def inspect_selects(container):
 
         except Exception:
             pass
+
+
+# ============================================================
+# Detect Application Questions
+# ============================================================
+
+def detect_application_questions(container):
+    """Inspect and print visible application questions without guessing answers."""
+
+    print()
+    print("=" * 70)
+    print("APPLICATION QUESTION DETECTION")
+    print("=" * 70)
+
+    questions_found = []
+    seen = set()
+
+    selectors = [
+        "fieldset",
+        "[role='group']",
+        ".jobs-easy-apply-form-section__grouping",
+        ".fb-dash-form-element",
+    ]
+
+    for selector in selectors:
+        try:
+            groups = container.locator(selector)
+
+            for i in range(groups.count()):
+                group = groups.nth(i)
+
+                if not group.is_visible():
+                    continue
+
+                text = safe_text(group)
+
+                if not text or len(text) > 1200:
+                    continue
+
+                controls = group.locator(
+                    "input, textarea, select, "
+                    "[role='radio'], [role='checkbox'], [role='combobox']"
+                )
+
+                if controls.count() == 0:
+                    continue
+
+                normalized = re.sub(r"\s+", " ", text).strip()
+
+                if normalized and normalized not in seen:
+                    seen.add(normalized)
+                    questions_found.append(normalized)
+
+        except Exception:
+            continue
+
+    if not questions_found:
+        try:
+            labels = container.locator(
+                "label, legend, [data-test-form-element-label]"
+            )
+
+            for i in range(labels.count()):
+                label = labels.nth(i)
+
+                if not label.is_visible():
+                    continue
+
+                text = safe_text(label)
+                normalized = re.sub(r"\s+", " ", text).strip()
+
+                if normalized and normalized not in seen:
+                    seen.add(normalized)
+                    questions_found.append(normalized)
+
+        except Exception:
+            pass
+
+    if not questions_found:
+        print()
+        print("No application questions detected.")
+    else:
+        for index, question in enumerate(questions_found, start=1):
+            print()
+            print(f"QUESTION {index}")
+            print("-" * 50)
+            print(question)
+
+        print()
+        print("=" * 70)
+        print(f"QUESTIONS FOUND: {len(questions_found)}")
+        print("=" * 70)
+
+    return questions_found
 
 
 # ============================================================
@@ -1432,7 +1411,7 @@ def prepare_current_page(page: Page):
     # Other controls
     # --------------------------------------------------------
 
-    unresolved_radios = inspect_radio_buttons(
+    inspect_radio_buttons(
         container
     )
 
@@ -1445,6 +1424,14 @@ def prepare_current_page(page: Page):
     )
 
     # --------------------------------------------------------
+    # Application questions
+    # --------------------------------------------------------
+
+    detect_application_questions(
+        container
+    )
+
+    # --------------------------------------------------------
     # Required fields
     # --------------------------------------------------------
 
@@ -1453,10 +1440,6 @@ def prepare_current_page(page: Page):
             container
         )
     )
-
-    # Treat unresolved radio questions as blocking issues.
-    if unresolved_radios > 0:
-        unanswered += unresolved_radios
 
     return unanswered
 
