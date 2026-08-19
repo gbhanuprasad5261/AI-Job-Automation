@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+
 from application_form import inspect_and_prepare_form
 from playwright.sync_api import sync_playwright
 
@@ -14,6 +15,8 @@ TRACKER_FILE = "data/application_tracker.csv"
 
 MIN_MATCH_SCORE = 70
 
+CHROME_CDP_URL = "http://127.0.0.1:9222"
+
 
 # ---------------------------------------
 # Load CSV
@@ -22,7 +25,9 @@ MIN_MATCH_SCORE = 70
 def load_csv(file_path):
 
     if not os.path.exists(file_path):
+
         print(f"File not found: {file_path}")
+
         return []
 
     with open(
@@ -57,6 +62,7 @@ def get_application_statuses():
         ).strip()
 
         if title:
+
             statuses[title] = status
 
     return statuses
@@ -71,6 +77,7 @@ def get_recommended_jobs():
     jobs = load_csv(ANALYSIS_FILE)
 
     if not jobs:
+
         return []
 
     statuses = get_application_statuses()
@@ -88,7 +95,7 @@ def get_recommended_jobs():
                 ).replace("%", "")
             )
 
-        except ValueError:
+        except (ValueError, AttributeError):
 
             score = 0
 
@@ -101,10 +108,13 @@ def get_recommended_jobs():
             .lower()
         )
 
-        title = job.get(
-            "Title",
-            ""
-        ).strip()
+        title = (
+            job.get(
+                "Title",
+                ""
+            )
+            .strip()
+        )
 
         status = statuses.get(
             title,
@@ -116,12 +126,11 @@ def get_recommended_jobs():
         # ---------------------------------------
 
         if score < MIN_MATCH_SCORE:
-            continue
 
-        if easy_apply != "yes":
             continue
 
         if status != "NOT APPLIED":
+
             continue
 
         recommended.append(job)
@@ -159,13 +168,14 @@ def display_jobs(jobs):
         )
 
         print()
+
         print(
             f"Minimum Match Score : "
             f"{MIN_MATCH_SCORE}%"
         )
 
         print(
-            "Easy Apply          : Yes"
+            "Live Easy Apply     : Verified when job opens"
         )
 
         print(
@@ -180,6 +190,7 @@ def display_jobs(jobs):
     ):
 
         print()
+
         print(
             f"{index}. "
             f"{job.get('Title', '')}"
@@ -206,7 +217,7 @@ def display_jobs(jobs):
         )
 
         print(
-            f"   Easy Apply: "
+            f"   CSV Easy Apply: "
             f"{job.get('Easy Apply', '')}"
         )
 
@@ -222,6 +233,7 @@ def display_jobs(jobs):
 def convert_to_job_url(link):
 
     if not link:
+
         return ""
 
     if "currentJobId=" in link:
@@ -248,58 +260,76 @@ def convert_to_job_url(link):
 # ---------------------------------------
 
 def find_easy_apply_button(page):
+    """
+    Find the LinkedIn Easy Apply application control.
+
+    LinkedIn may display the visible button as "Apply"
+    while the job description says that the application
+    uses Easy Apply.
+
+    We therefore use:
+      1. Explicit Easy Apply controls
+      2. LinkedIn accessibility information
+      3. The job's application-process text
+    """
+
+    # ---------------------------------------
+    # 1. Explicit Easy Apply controls
+    # ---------------------------------------
 
     selectors = [
-
-        # Standard LinkedIn button
-        "button.jobs-apply-button",
-
-        # Easy Apply text
-        "button:has-text('Easy Apply')",
-
-        # Button containing Easy Apply
-        "[aria-label*='Easy Apply']",
-
-        # Generic button
-        "button"
+        "button",
+        "[role='button']",
+        "a"
     ]
 
     for selector in selectors:
 
         try:
 
-            locator = page.locator(
-                selector
-            )
+            elements = page.locator(selector)
 
-            count = locator.count()
-
-            for index in range(count):
-
-                element = locator.nth(index)
+            for i in range(elements.count()):
 
                 try:
+
+                    element = elements.nth(i)
 
                     if not element.is_visible():
                         continue
 
                     text = (
-                        element.inner_text()
+                        element
+                        .inner_text()
                         .strip()
                         .lower()
                     )
 
                     aria = (
-                        element.get_attribute(
-                            "aria-label"
-                        )
+                        element
+                        .get_attribute("aria-label")
                         or ""
                     ).lower()
 
-                    if (
-                        "easy apply" in text
-                        or "easy apply" in aria
-                    ):
+                    title = (
+                        element
+                        .get_attribute("title")
+                        or ""
+                    ).lower()
+
+                    combined = (
+                        text
+                        + " "
+                        + aria
+                        + " "
+                        + title
+                    )
+
+                    if "easy apply" in combined:
+
+                        print(
+                            "Explicit Easy Apply control found."
+                        )
 
                         return element
 
@@ -309,17 +339,306 @@ def find_easy_apply_button(page):
         except Exception:
             continue
 
+    # ---------------------------------------
+    # 2. Inspect page text
+    # ---------------------------------------
+
+    try:
+
+        body = page.locator(
+            "body"
+        ).inner_text()
+
+    except Exception:
+
+        body = ""
+
+    body_lower = body.lower()
+
+    # ---------------------------------------
+    # 3. Reject external applications
+    # ---------------------------------------
+
+    external_signals = [
+
+        "apply on company website",
+
+        "apply on the company website",
+
+        "apply externally",
+
+        "application on company website",
+
+        "apply via company website"
+    ]
+
+    for signal in external_signals:
+
+        if signal in body_lower:
+
+            print(
+                "External application detected."
+            )
+
+            return None
+
+    # ---------------------------------------
+    # 4. Easy Apply description signal
+    # ---------------------------------------
+
+    easy_apply_signals = [
+
+        "easy apply button",
+
+        "submit your application through the easy apply button",
+
+        "apply through the easy apply button",
+
+        "easy apply"
+    ]
+
+    easy_apply_description = False
+
+    for signal in easy_apply_signals:
+
+        if signal in body_lower:
+
+            easy_apply_description = True
+            break
+
+    if easy_apply_description:
+
+        print(
+            "Easy Apply confirmed from job description."
+        )
+
+        # ---------------------------------------
+        # Find the main Apply button
+        # ---------------------------------------
+
+        apply_candidates = []
+
+        try:
+
+            buttons = page.locator(
+                "button, [role='button'], a"
+            )
+
+            for i in range(buttons.count()):
+
+                try:
+
+                    element = buttons.nth(i)
+
+                    if not element.is_visible():
+                        continue
+
+                    text = (
+                        element
+                        .inner_text()
+                        .strip()
+                        .lower()
+                    )
+
+                    aria = (
+                        element
+                        .get_attribute(
+                            "aria-label"
+                        )
+                        or ""
+                    ).lower()
+
+                    combined = (
+                        text
+                        + " "
+                        + aria
+                    )
+
+                    # Main LinkedIn Apply button
+                    if (
+                        text == "apply"
+                        or
+                        "linkedin apply to this job"
+                        in combined
+                    ):
+
+                        apply_candidates.append(
+                            element
+                        )
+
+                except Exception:
+                    continue
+
+        except Exception:
+            pass
+
+        if apply_candidates:
+
+            print(
+                "LinkedIn Apply control found."
+            )
+
+            return apply_candidates[0]
+
+    # ---------------------------------------
+    # Nothing found
+    # ---------------------------------------
+
     return None
+
+
+# ---------------------------------------
+# Check Whether Job Is Closed
+# ---------------------------------------
+
+def is_job_closed(body_text):
+
+    closed_messages = [
+
+        "No longer accepting applications",
+
+        "This job is no longer accepting applications",
+
+        "Job is no longer accepting applications"
+    ]
+
+    text = body_text.lower()
+
+    for message in closed_messages:
+
+        if message.lower() in text:
+
+            return True
+
+    return False
+
+
+# ---------------------------------------
+# Print Application Controls
+# ---------------------------------------
+
+def print_application_controls(page):
+
+    print()
+    print(
+        "Visible application-related elements:"
+    )
+
+    try:
+
+        candidates = page.locator(
+            "button, a, [role='button']"
+        )
+
+        count = candidates.count()
+
+        shown = 0
+
+        for i in range(count):
+
+            if shown >= 30:
+
+                break
+
+            element = candidates.nth(i)
+
+            try:
+
+                if not element.is_visible():
+
+                    continue
+
+                text = (
+                    element.inner_text()
+                    .strip()
+                )
+
+                aria = (
+                    element.get_attribute(
+                        "aria-label"
+                    )
+                    or ""
+                )
+
+                combined = (
+                    text + " " + aria
+                ).lower()
+
+                if any(
+                    keyword in combined
+                    for keyword in [
+                        "apply",
+                        "easy",
+                        "application"
+                    ]
+                ):
+
+                    print(
+                        f"  [{i}] "
+                        f"Text: {text[:150]}"
+                    )
+
+                    if aria:
+
+                        print(
+                            f"       "
+                            f"Aria: {aria[:150]}"
+                        )
+
+                    shown += 1
+
+            except Exception:
+
+                continue
+
+    except Exception as e:
+
+        print(
+            "Could not inspect "
+            f"application controls: {e}"
+        )
+
+
+# ---------------------------------------
+# Save Diagnostic Screenshot
+# ---------------------------------------
+
+def save_diagnostic_screenshot(page):
+
+    try:
+
+        os.makedirs(
+            "screenshots",
+            exist_ok=True
+        )
+
+        path = (
+            "screenshots/"
+            "easy_apply_not_found.png"
+        )
+
+        page.screenshot(
+            path=path,
+            full_page=True
+        )
+
+        print()
+        print(
+            f"Diagnostic screenshot saved: {path}"
+        )
+
+    except Exception as e:
+
+        print(
+            f"Screenshot failed: {e}"
+        )
 
 
 # ---------------------------------------
 # Open Easy Apply
 # ---------------------------------------
 
-def open_easy_apply(
-    job,
-    browser_context
-):
+def open_easy_apply(job):
 
     link = job.get(
         "Link",
@@ -330,8 +649,9 @@ def open_easy_apply(
 
     if not link:
 
-        print()
-        print("Job URL not found.")
+        print(
+            "Job URL not found."
+        )
 
         return False
 
@@ -361,96 +681,148 @@ def open_easy_apply(
     )
 
     print(
-        f"URL     : "
-        f"{link}"
+        f"URL     : {link}"
     )
 
     # ---------------------------------------
-    # Get existing page
+    # Connect to existing Chrome
     # ---------------------------------------
 
-    if browser_context.pages:
+    with sync_playwright() as p:
 
-        page = browser_context.pages[0]
+        try:
 
-    else:
+            browser = (
+                p.chromium.connect_over_cdp(
+                    CHROME_CDP_URL
+                )
+            )
 
-        page = browser_context.new_page()
-
-    # ---------------------------------------
-    # Open job
-    # ---------------------------------------
-
-    try:
-
-        page.goto(
-            link,
-            wait_until="domcontentloaded",
-            timeout=30000
-        )
-
-        page.wait_for_timeout(3000)
-
-    except Exception as e:
-
-        print()
-        print(
-            "Could not open job page."
-        )
-
-        print(
-            f"Error: {e}"
-        )
-
-        return False
-
-    print()
-    print(
-        f"Page title: {page.title()}"
-    )
-
-    # ---------------------------------------
-    # Read page text
-    # ---------------------------------------
-
-    try:
-
-        body_text = page.locator(
-            "body"
-        ).inner_text()
-
-    except Exception:
-
-        body_text = ""
-
-    body_lower = body_text.lower()
-
-    # ---------------------------------------
-    # Check closed job
-    # ---------------------------------------
-
-    closed_messages = [
-
-        "no longer accepting applications",
-
-        "this job is no longer accepting applications",
-
-        "job is no longer accepting applications",
-
-        "applications are closed",
-
-        "no longer accepting",
-
-    ]
-
-    for message in closed_messages:
-
-        if message in body_lower:
+        except Exception as e:
 
             print()
             print(
-                "JOB CLOSED"
+                "Could not connect to Chrome."
             )
+
+            print(
+                "Start Chrome using:"
+            )
+
+            print(
+                ".\\start_chrome.bat"
+            )
+
+            print()
+            print(
+                f"Error: {e}"
+            )
+
+            return False
+
+        if not browser.contexts:
+
+            print(
+                "No browser context found."
+            )
+
+            return False
+
+        context = browser.contexts[0]
+
+        # ---------------------------------------
+        # Find LinkedIn page
+        # ---------------------------------------
+
+        page = None
+
+        for existing_page in context.pages:
+
+            try:
+
+                if (
+                    "linkedin.com"
+                    in existing_page.url
+                ):
+
+                    page = existing_page
+
+                    break
+
+            except Exception:
+
+                continue
+
+        if page is None:
+
+            if context.pages:
+
+                page = context.pages[0]
+
+            else:
+
+                page = context.new_page()
+
+        # ---------------------------------------
+        # Open job
+        # ---------------------------------------
+
+        try:
+
+            page.goto(
+                link,
+                wait_until="domcontentloaded",
+                timeout=30000
+            )
+
+            page.wait_for_timeout(
+                5000
+            )
+
+        except Exception as e:
+
+            print()
+            print(
+                f"Could not open job: {e}"
+            )
+
+            return False
+
+        print()
+        print(
+            f"Page title: {page.title()}"
+        )
+
+        print(
+            f"Current URL: {page.url}"
+        )
+
+        # ---------------------------------------
+        # Read page
+        # ---------------------------------------
+
+        try:
+
+            body_text = (
+                page.locator(
+                    "body"
+                ).inner_text()
+            )
+
+        except Exception:
+
+            body_text = ""
+
+        # ---------------------------------------
+        # Check closed job
+        # ---------------------------------------
+
+        if is_job_closed(body_text):
+
+            print()
+            print("=" * 70)
+            print("JOB CLOSED")
+            print("=" * 70)
 
             print(
                 "This job is no longer "
@@ -463,117 +835,132 @@ def open_easy_apply(
 
             return False
 
-    # ---------------------------------------
-    # Find Easy Apply
-    # ---------------------------------------
-
-    easy_apply_button = (
-        find_easy_apply_button(page)
-    )
-
-    if easy_apply_button is None:
+        # ---------------------------------------
+        # Find Easy Apply
+        # ---------------------------------------
 
         print()
         print(
-            "Easy Apply button not found."
+            "Searching for Easy Apply button..."
         )
 
-        print(
-            "Skipping this job..."
+        easy_apply = (
+            find_easy_apply_button(page)
         )
 
-        return False
+        # ---------------------------------------
+        # Easy Apply not found
+        # ---------------------------------------
 
-    # ---------------------------------------
-    # Easy Apply found
-    # ---------------------------------------
+        if easy_apply is None:
 
-    print()
-    print(
-        "Easy Apply button found."
-    )
+            print()
+            print("=" * 70)
+            print("EASY APPLY NOT FOUND")
+            print("=" * 70)
 
-    # ---------------------------------------
-    # Click Easy Apply
-    # ---------------------------------------
+            print()
+            print(
+                "LinkedIn did not expose an "
+                "Easy Apply control."
+            )
 
-    try:
+            print_application_controls(
+                page
+            )
 
-        easy_apply_button.click(
-            timeout=10000
-        )
+            save_diagnostic_screenshot(
+                page
+            )
 
-    except Exception as e:
+            return False
+
+        # ---------------------------------------
+        # Easy Apply found
+        # ---------------------------------------
 
         print()
-        print(
-            "Could not click Easy Apply."
+        print("=" * 70)
+        print("EASY APPLY BUTTON FOUND")
+        print("=" * 70)
+
+        try:
+
+            easy_apply.scroll_into_view_if_needed()
+
+            page.wait_for_timeout(
+                500
+            )
+
+            easy_apply.click(
+                timeout=10000
+            )
+
+        except Exception as e:
+
+            print()
+            print(
+                f"Normal click failed: {e}"
+            )
+
+            print(
+                "Trying JavaScript click..."
+            )
+
+            try:
+
+                easy_apply.evaluate(
+                    "(element) => element.click()"
+                )
+
+            except Exception as js_error:
+
+                print(
+                    "JavaScript click failed:"
+                )
+
+                print(
+                    js_error
+                )
+
+                return False
+
+        # ---------------------------------------
+        # Wait for application form
+        # ---------------------------------------
+
+        page.wait_for_timeout(
+            3000
         )
 
-        print(
-            f"Error: {e}"
-        )
+        print()
+        print("=" * 70)
+        print("EASY APPLY FORM OPENED")
+        print("=" * 70)
 
-        return False
+        # ---------------------------------------
+        # Run application form automation
+        # ---------------------------------------
 
-    # ---------------------------------------
-    # Wait for application form
-    # ---------------------------------------
+        try:
 
-    page.wait_for_timeout(2000)
+            inspect_and_prepare_form(
+                page
+            )
 
-    print()
-    print("=" * 70)
-    print(
-        "EASY APPLY FORM OPENED"
-    )
-    print("=" * 70)
+        except Exception as e:
 
-    # ---------------------------------------
-    # Display form text
-    # ---------------------------------------
+            print()
+            print(
+                "Application form automation "
+                "failed:"
+            )
 
-    try:
+            print(e)
 
-        form_text = page.locator(
-            "body"
-        ).inner_text()
+            return False
 
-        print(
-            form_text[:12000]
-        )
-
-    except Exception:
-
-        print(
-            "Could not read application form."
-        )
-
-    print()
-    print("=" * 70)
-
-    print(
-        "Application form is ready."
-    )
-
-    print(
-        "Automation will NOT submit the application yet."
-    )
-
-    print()
-
-    inspect_and_prepare_form(page)
-
-    print()
-    print("=" * 70)
-    print("READY FOR APPLICATION AUTOMATION")
-    print("=" * 70)
-
-    input(
-        "\nPress ENTER to continue..."
-    )
-
-    return True
+        return True
 
 
 # ---------------------------------------
@@ -584,9 +971,7 @@ def main():
 
     print()
     print("=" * 70)
-    print(
-        "AI JOB AUTOMATION - EASY APPLY"
-    )
+    print("AI JOB AUTOMATION - EASY APPLY")
     print("=" * 70)
 
     # ---------------------------------------
@@ -637,125 +1022,91 @@ def main():
         return
 
     # ---------------------------------------
-    # Connect to Chrome
+    # Try selected and following jobs
     # ---------------------------------------
 
-    with sync_playwright() as p:
+    for index in range(
+        choice - 1,
+        len(jobs)
+    ):
 
-        try:
-
-            browser = (
-                p.chromium.connect_over_cdp(
-                    "http://127.0.0.1:9222"
-                )
-            )
-
-        except Exception as e:
-
-            print()
-            print(
-                "Could not connect to Chrome."
-            )
-
-            print()
-            print(
-                "Start Chrome using:"
-            )
-
-            print(
-                ".\\start_chrome.bat"
-            )
-
-            print()
-            print(
-                f"Error: {e}"
-            )
-
-            return
-
-        context = browser.contexts[0]
-
-        # ---------------------------------------
-        # Try selected job and following jobs
-        # ---------------------------------------
-
-        for index in range(
-            choice - 1,
-            len(jobs)
-        ):
-
-            job = jobs[index]
-
-            print()
-            print("=" * 70)
-
-            print(
-                f"TRYING JOB "
-                f"{index + 1}/{len(jobs)}"
-            )
-
-            print("=" * 70)
-
-            print(
-                f"Title : "
-                f"{job.get('Title', '')}"
-            )
-
-            print(
-                f"Score : "
-                f"{job.get('Match Score', '')}"
-            )
-
-            success = open_easy_apply(
-                job,
-                context
-            )
-
-            # ---------------------------------------
-            # Active Easy Apply job found
-            # ---------------------------------------
-
-            if success:
-
-                print()
-                print("=" * 70)
-
-                print(
-                    "READY FOR APPLICATION AUTOMATION"
-                )
-
-                print("=" * 70)
-
-                return
-
-            # ---------------------------------------
-            # Try next job
-            # ---------------------------------------
-
-            if index + 1 < len(jobs):
-
-                print()
-                print(
-                    "Trying next eligible job..."
-                )
-
-        # ---------------------------------------
-        # No active jobs found
-        # ---------------------------------------
+        job = jobs[index]
 
         print()
         print("=" * 70)
 
         print(
-            "NO ACTIVE EASY APPLY JOB FOUND"
+            f"TRYING JOB "
+            f"{index + 1}/{len(jobs)}"
         )
 
         print("=" * 70)
 
         print(
-            "All selected/remaining jobs were "
-            "closed or unavailable."
+            f"Title : "
+            f"{job.get('Title', '')}"
         )
+
+        print(
+            f"Score : "
+            f"{job.get('Match Score', '')}"
+        )
+
+        # ---------------------------------------
+        # Try job
+        # ---------------------------------------
+        # Easy Apply is verified LIVE inside
+        # open_easy_apply(). The CSV value is only
+        # a candidate hint because LinkedIn status
+        # can change after the CSV is generated.
+
+        success = open_easy_apply(job)
+
+        # ---------------------------------------
+        # Active Easy Apply found
+        # ---------------------------------------
+
+        if success:
+
+            print()
+            print("=" * 70)
+
+            print(
+                "READY FOR APPLICATION AUTOMATION"
+            )
+
+            print("=" * 70)
+
+            return
+
+        # ---------------------------------------
+        # Try next job
+        # ---------------------------------------
+
+        if index + 1 < len(jobs):
+
+            print()
+            print(
+                "Trying next eligible job..."
+            )
+
+    # ---------------------------------------
+    # No active job found
+    # ---------------------------------------
+
+    print()
+    print("=" * 70)
+
+    print(
+        "NO ACTIVE EASY APPLY JOB FOUND"
+    )
+
+    print("=" * 70)
+
+    print(
+        "All selected/remaining jobs "
+        "were closed or unavailable."
+    )
 
 
 # ---------------------------------------
