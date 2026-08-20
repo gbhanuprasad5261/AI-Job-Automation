@@ -88,6 +88,17 @@ def is_visible(element):
         return False
 
 
+def safe_input_value(element):
+    try:
+        return element.input_value().strip()
+    except Exception:
+        return ""
+
+
+def normalize(value):
+    return re.sub(r"\s+", " ", value or "").strip()
+
+
 def fill_if_empty(locator, value):
 
     if not value:
@@ -183,6 +194,22 @@ def print_application_status(page: Page):
     print("Application page: unknown")
 
 
+def get_application_step(page):
+    """Return LinkedIn visible application progress as (current, total)."""
+    try:
+        body = page.locator("body").inner_text()
+        match = re.search(r"\b(\d+)\s*/\s*(\d+)\s+pages?\b", body, re.IGNORECASE)
+        if not match:
+            match = re.search(r"\b(\d+)\s*/\s*(\d+)\b", body)
+        if match:
+            current, total = int(match.group(1)), int(match.group(2))
+            if 0 < current <= total <= 20:
+                return current, total
+    except Exception:
+        pass
+    return None
+
+
 # ============================================================
 # Fill Name
 # ============================================================
@@ -204,8 +231,8 @@ def fill_name(container):
 
     # First name / last name handling
 
-    first_name = "G"
-    last_name = "Bhanu Prasad"
+    first_name = "Bhanu"
+    last_name = "Prasad"
 
     filled = False
 
@@ -935,100 +962,6 @@ def inspect_selects(container):
 
 
 # ============================================================
-# Detect Application Questions
-# ============================================================
-
-def detect_application_questions(container):
-    """Inspect and print visible application questions without guessing answers."""
-
-    print()
-    print("=" * 70)
-    print("APPLICATION QUESTION DETECTION")
-    print("=" * 70)
-
-    questions_found = []
-    seen = set()
-
-    selectors = [
-        "fieldset",
-        "[role='group']",
-        ".jobs-easy-apply-form-section__grouping",
-        ".fb-dash-form-element",
-    ]
-
-    for selector in selectors:
-        try:
-            groups = container.locator(selector)
-
-            for i in range(groups.count()):
-                group = groups.nth(i)
-
-                if not group.is_visible():
-                    continue
-
-                text = safe_text(group)
-
-                if not text or len(text) > 1200:
-                    continue
-
-                controls = group.locator(
-                    "input, textarea, select, "
-                    "[role='radio'], [role='checkbox'], [role='combobox']"
-                )
-
-                if controls.count() == 0:
-                    continue
-
-                normalized = re.sub(r"\s+", " ", text).strip()
-
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    questions_found.append(normalized)
-
-        except Exception:
-            continue
-
-    if not questions_found:
-        try:
-            labels = container.locator(
-                "label, legend, [data-test-form-element-label]"
-            )
-
-            for i in range(labels.count()):
-                label = labels.nth(i)
-
-                if not label.is_visible():
-                    continue
-
-                text = safe_text(label)
-                normalized = re.sub(r"\s+", " ", text).strip()
-
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    questions_found.append(normalized)
-
-        except Exception:
-            pass
-
-    if not questions_found:
-        print()
-        print("No application questions detected.")
-    else:
-        for index, question in enumerate(questions_found, start=1):
-            print()
-            print(f"QUESTION {index}")
-            print("-" * 50)
-            print(question)
-
-        print()
-        print("=" * 70)
-        print(f"QUESTIONS FOUND: {len(questions_found)}")
-        print("=" * 70)
-
-    return questions_found
-
-
-# ============================================================
 # Inspect Required Fields
 # ============================================================
 
@@ -1351,6 +1284,362 @@ def job_is_closed(page):
 
 
 # ============================================================
+# Handle Education Date Fields
+# ============================================================
+
+EDUCATION_RECORDS = {
+    "btech": {
+        "school": "Siddartha Institute of Science and Technology",
+        "city": "Puttur, Andhra Pradesh",
+        "degree": "B.Tech",
+        "major": "Computer Science and Engineering (AI&DS)",
+        "from_month": "June",
+        "from_year": "2021",
+        "to_month": "June",
+        "to_year": "2025",
+    },
+    "intermediate": {
+        "school": "Sri Sai Chaithanya Junior College",
+        "city": "Palamaner, Andhra Pradesh",
+        "degree": "Intermediate",
+        "major": "MPC",
+        "from_month": "June",
+        "from_year": "2019",
+        "to_month": "April",
+        "to_year": "2021",
+    },
+}
+
+
+def _select_by_label(select, label):
+    try:
+        select.select_option(label=label)
+        return True
+    except Exception:
+        pass
+    try:
+        options = select.locator("option")
+        for i in range(options.count()):
+            option = options.nth(i)
+            text = normalize(safe_text(option))
+            if text.lower() == label.lower():
+                value = safe_attribute(option, "value")
+                if value:
+                    select.select_option(value=value)
+                else:
+                    select.select_option(label=text)
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _find_visible_input_by_aria(page, aria_label):
+    """Find a visible textbox reliably, including LinkedIn's generated DOM."""
+    try:
+        page.wait_for_timeout(300)
+    except Exception:
+        pass
+
+    for selector in [
+        f"input[aria-label='{aria_label}']",
+        f"textarea[aria-label='{aria_label}']",
+        f"input[aria-label*='{aria_label}' i]",
+        f"textarea[aria-label*='{aria_label}' i]",
+    ]:
+        try:
+            locator = page.locator(selector)
+            for i in range(locator.count()):
+                el = locator.nth(i)
+                if is_visible(el):
+                    return el
+        except Exception:
+            pass
+
+    try:
+        locator = page.get_by_role(
+            "textbox",
+            name=re.compile(rf"^{re.escape(aria_label)}$", re.IGNORECASE)
+        )
+        for i in range(locator.count()):
+            el = locator.nth(i)
+            if is_visible(el):
+                return el
+    except Exception:
+        pass
+
+    # DOM fallback for stale React accessibility trees.
+    try:
+        selector = f"input[aria-label*='{aria_label}' i], textarea[aria-label*='{aria_label}' i]"
+        locator = page.locator(selector)
+        for i in range(locator.count()):
+            el = locator.nth(i)
+            if is_visible(el):
+                return el
+    except Exception:
+        pass
+
+    try:
+        labels = page.get_by_text(aria_label, exact=True)
+        for i in range(labels.count()):
+            label = labels.nth(i)
+            if not is_visible(label):
+                continue
+            for xpath in [
+                "xpath=..", "xpath=../..", "xpath=../../..", "xpath=../../../.."
+            ]:
+                candidate = label.locator(xpath).locator("input, textarea").first
+                if candidate.count() > 0 and is_visible(candidate):
+                    return candidate
+    except Exception:
+        pass
+    return None
+
+
+def _fill_exact_field(page, aria_label, value):
+    element = _find_visible_input_by_aria(page, aria_label)
+    if element is None:
+        print(f"Education field not found: {aria_label}")
+        return False
+    try:
+        current = safe_input_value(element)
+        if current != value:
+            element.fill(value)
+        print(f"{aria_label} set: {value}")
+        return True
+    except Exception as e:
+        print(f"Could not fill {aria_label}: {e}")
+        return False
+
+
+def _visible_education_selects(page):
+    """Return visible month/year selects from the active education editor."""
+    month_names = {
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december"
+    }
+    result = []
+    try:
+        selects = page.locator("select")
+        for i in range(selects.count()):
+            select = selects.nth(i)
+            if not is_visible(select):
+                continue
+            options = select.locator("option")
+            texts = [normalize(safe_text(options.nth(j))).lower()
+                     for j in range(min(options.count(), 60))]
+            has_months = len(month_names.intersection(texts)) >= 6
+            has_years = sum(bool(re.fullmatch(r"\d{4}", t)) for t in texts) >= 5
+            if has_months or has_years:
+                result.append(select)
+    except Exception:
+        pass
+    return result
+
+
+def fill_education_dates(container, page):
+    """Fill the currently open LinkedIn education editor from confirmed user data.
+
+    The live DOM supplied during this workflow exposes the editor with
+    aria-labels School, City, Degree and Major / Field of study, plus four
+    native month/year selects. Generated LinkedIn IDs are deliberately ignored.
+    """
+    print()
+    print("Checking education date fields...")
+
+    try:
+        body = normalize(page.locator("body").inner_text()).lower()
+    except Exception:
+        body = ""
+
+    if "dates attended" not in body or "education" not in body:
+        print("Education editor not found on this page.")
+        return False
+
+    school_el = _find_visible_input_by_aria(page, "School")
+    if school_el is None:
+        # LinkedIn sometimes exposes the editor textbox through the accessible
+        # role/name instead of a literal aria-label attribute.
+        for selector in [
+            "input[aria-label*='School' i]",
+            "textarea[aria-label*='School' i]",
+        ]:
+            try:
+                loc = page.locator(selector)
+                for i in range(loc.count()):
+                    candidate = loc.nth(i)
+                    if is_visible(candidate):
+                        school_el = candidate
+                        break
+                if school_el is not None:
+                    break
+            except Exception:
+                pass
+    if school_el is None:
+        try:
+            loc = page.get_by_role("textbox", name=re.compile(r"^School$", re.I))
+            for i in range(loc.count()):
+                candidate = loc.nth(i)
+                if is_visible(candidate):
+                    school_el = candidate
+                    break
+        except Exception:
+            pass
+    if school_el is None:
+        print("Active education school field not found.")
+        print("Education editor was detected, but LinkedIn did not expose the School textbox to automation.")
+        return False
+
+    current_school = safe_input_value(school_el)
+    current_lower = current_school.lower()
+
+    if "siddartha" in current_lower or "siddhartha" in current_lower:
+        record = EDUCATION_RECORDS["btech"]
+        record_name = "B.Tech"
+    elif "sri sai" in current_lower or "zilla parishad" in current_lower:
+        record = EDUCATION_RECORDS["intermediate"]
+        record_name = "Intermediate"
+    else:
+        # The live LinkedIn form can open an unrelated third education record
+        # (for example, an old high-school entry) even though the user's
+        # confirmed profile contains exactly two education records.
+        # Do not overwrite it with guessed data. Remove the unconfirmed record
+        # instead, after confirming that it is not one of the two records.
+        if current_school and normalize(current_school).lower() not in {
+            normalize(EDUCATION_RECORDS["btech"]["school"]).lower(),
+            normalize(EDUCATION_RECORDS["intermediate"]["school"]).lower(),
+        }:
+            print(
+                f"Unconfirmed education record detected: {current_school}"
+            )
+            print(
+                "This record is not part of the confirmed education profile."
+            )
+
+            try:
+                delete_buttons = page.get_by_role(
+                    "button",
+                    name=re.compile(
+                        r"^Delete education$",
+                        re.IGNORECASE
+                    )
+                )
+
+                for i in range(delete_buttons.count()):
+                    button = delete_buttons.nth(i)
+
+                    if is_visible(button) and button.is_enabled():
+                        print("Removing unconfirmed education record...")
+                        button.click()
+                        page.wait_for_timeout(1000)
+
+                        # LinkedIn may show a confirmation dialog.
+                        confirm = page.get_by_role(
+                            "button",
+                            name=re.compile(
+                                r"^(Delete|Confirm)$",
+                                re.IGNORECASE
+                            )
+                        )
+
+                        for j in range(confirm.count()):
+                            c = confirm.nth(j)
+                            if (
+                                is_visible(c)
+                                and c.is_enabled()
+                                and c != button
+                            ):
+                                try:
+                                    c.click()
+                                    page.wait_for_timeout(1000)
+                                    break
+                                except Exception:
+                                    pass
+
+                        print("Unconfirmed education record removed.")
+                        return True
+
+            except Exception as e:
+                print(f"Could not remove unconfirmed education record: {e}")
+
+        print(
+            f"Active education school not recognized: "
+            f"{current_school or '[unknown]'}"
+        )
+        print("Education fields were NOT guessed or changed.")
+        return False
+
+    print(f"Active education record: {record_name}")
+
+    field_ok = True
+    for label, value in [
+        ("School", record["school"]),
+        ("City", record["city"]),
+        ("Degree", record["degree"]),
+        ("Major / Field of study", record["major"]),
+    ]:
+        if not _fill_exact_field(page, label, value):
+            field_ok = False
+
+    education_selects = _visible_education_selects(page)
+    if len(education_selects) < 4:
+        print(f"Education date dropdowns incomplete: found {len(education_selects)}.")
+        return False
+
+    fields = [
+        ("From Month", education_selects[0], record["from_month"]),
+        ("From Year", education_selects[1], record["from_year"]),
+        ("To Month", education_selects[2], record["to_month"]),
+        ("To Year", education_selects[3], record["to_year"]),
+    ]
+
+    dates_ok = True
+    for label, select, value in fields:
+        if _select_by_label(select, value):
+            actual = safe_input_value(select)
+            print(f"{label}: {actual or value}")
+        else:
+            print(f"Could not select {label}: {value}")
+            dates_ok = False
+
+    verified = field_ok and dates_ok
+    for label, expected in [
+        ("School", record["school"]),
+        ("City", record["city"]),
+        ("Degree", record["degree"]),
+        ("Major / Field of study", record["major"]),
+    ]:
+        el = _find_visible_input_by_aria(page, label)
+        actual = safe_input_value(el) if el is not None else ""
+        if normalize(actual).lower() != normalize(expected).lower():
+            print(f"Education verification failed for {label}: {actual or '[empty]'}")
+            verified = False
+
+    for label, select, expected in fields:
+        actual = safe_input_value(select)
+        if not actual:
+            print(f"Education verification failed for {label}: [empty]")
+            verified = False
+
+    if verified:
+        print(f"Education record filled and verified: {record_name}")
+        try:
+            save_buttons = page.get_by_role("button", name=re.compile(r"^Save$", re.IGNORECASE))
+            for i in range(save_buttons.count()):
+                save_button = save_buttons.nth(i)
+                if is_visible(save_button) and save_button.is_enabled():
+                    save_button.click()
+                    page.wait_for_timeout(1000)
+                    print("Education record saved.")
+                    break
+        except Exception as e:
+            print(f"Could not save education record: {e}")
+    else:
+        print("Education record verification failed. No guessing was performed.")
+    return verified
+
+
+# ============================================================
 # Prepare Current Application Page
 # ============================================================
 
@@ -1400,6 +1689,14 @@ def prepare_current_page(page: Page):
     )
 
     # --------------------------------------------------------
+    # Education
+    # --------------------------------------------------------
+    fill_education_dates(
+        container,
+        page
+    )
+
+    # --------------------------------------------------------
     # Common fields
     # --------------------------------------------------------
 
@@ -1424,14 +1721,6 @@ def prepare_current_page(page: Page):
     )
 
     # --------------------------------------------------------
-    # Application questions
-    # --------------------------------------------------------
-
-    detect_application_questions(
-        container
-    )
-
-    # --------------------------------------------------------
     # Required fields
     # --------------------------------------------------------
 
@@ -1449,57 +1738,73 @@ def prepare_current_page(page: Page):
 # ============================================================
 
 def move_to_next_page(page: Page):
-
-    container = get_application_container(
-        page
-    )
-
-    button = find_next_button(
-        container
-    )
+    container = get_application_container(page)
+    button = find_next_button(container)
 
     if button is None:
-
         print()
-        print(
-            "Next/Continue/Review button "
-            "not found."
-        )
-
+        print("Next/Continue/Review button not found.")
         return False
+
+    before = get_application_step(page)
+    print()
+    print("Next button found.")
+    if before:
+        print(f"Current application step: {before[0]}/{before[1]}")
+
+    # Capture the visible application container text before clicking. LinkedIn
+    # can leave the step counter unchanged while changing the actual editor.
+    try:
+        before_text = normalize(get_application_container(page).inner_text())
+    except Exception:
+        before_text = ""
 
     try:
-
-        print()
-        print(
-            "Next button found."
-        )
-
         button.scroll_into_view_if_needed()
-
-        page.wait_for_timeout(
-            500
-        )
-
+        page.wait_for_timeout(500)
+        if not button.is_enabled():
+            print("Navigation button is disabled.")
+            return False
         button.click()
-
-        page.wait_for_timeout(
-            2000
-        )
-
-        print(
-            "Moved to next application page."
-        )
-
-        return True
-
     except Exception as e:
-
-        print(
-            f"Could not move to next page: {e}"
-        )
-
+        print(f"Could not move to next page: {e}")
         return False
+
+    for _ in range(20):
+        page.wait_for_timeout(500)
+        after = get_application_step(page)
+        try:
+            after_text = normalize(get_application_container(page).inner_text())
+        except Exception:
+            after_text = ""
+
+        if before and after:
+            if after[1] == before[1] and after[0] > before[0]:
+                print("Moved to next application page.")
+                print(f"New application step: {after[0]}/{after[1]}")
+                return True
+        elif not before and after:
+            print(f"Application step detected after navigation: {after[0]}/{after[1]}")
+            return True
+
+        # If the visible form actually changed, allow the caller to process it
+        # even when LinkedIn's counter is stale.
+        if before_text and after_text and after_text != before_text:
+            print("Application form content changed after navigation.")
+            return True
+
+    current = get_application_step(page)
+    print()
+    print("=" * 70)
+    print("APPLICATION PAGE DID NOT ADVANCE")
+    print("=" * 70)
+    if before:
+        print(f"Before click: {before[0]}/{before[1]}")
+    if current:
+        print(f"After wait : {current[0]}/{current[1]}")
+    print("The application step did not increase.")
+    print("Stopping safely instead of clicking Next repeatedly.")
+    return False
 
 
 # ============================================================
@@ -1641,7 +1946,8 @@ def inspect_and_prepare_form(
     # Process multiple application pages
     # --------------------------------------------------------
 
-    max_pages = 10
+    max_pages = 8
+    seen_form_fingerprints = set()
 
     for page_number in range(
         1,
@@ -1669,6 +1975,20 @@ def inspect_and_prepare_form(
             )
 
             return False
+
+        # Prevent an accidental infinite loop if LinkedIn reports a stale
+        # 4/5 counter while showing the same editor again.
+        try:
+            fingerprint = normalize(get_application_container(page).inner_text())
+        except Exception:
+            fingerprint = ""
+        if fingerprint:
+            if fingerprint in seen_form_fingerprints:
+                print()
+                print("SAME APPLICATION FORM DETECTED AGAIN")
+                print("Stopping safely instead of clicking Next repeatedly.")
+                return False
+            seen_form_fingerprints.add(fingerprint)
 
         unanswered = (
             prepare_current_page(
