@@ -1881,16 +1881,41 @@ def handle_final_submission(page: Page):
 
         submit_button.click()
 
-        page.wait_for_timeout(
-            3000
+        page.wait_for_timeout(3000)
+
+        try:
+            body_after_submit = page.locator("body").inner_text().lower()
+        except Exception:
+            body_after_submit = ""
+
+        success_markers = (
+            "application submitted",
+            "your application was submitted",
+            "application has been submitted",
+            "applied",
         )
+
+        if any(marker in body_after_submit for marker in success_markers):
+            print()
+            print("APPLICATION SUBMITTED")
+            return True
+
+        try:
+            remaining_submit = find_submit_button(
+                get_application_container(page)
+            )
+        except Exception:
+            remaining_submit = None
+
+        if remaining_submit is None:
+            print()
+            print("APPLICATION SUBMISSION COMPLETED")
+            return True
 
         print()
-        print(
-            "APPLICATION SUBMITTED"
-        )
-
-        return True
+        print("SUBMISSION COULD NOT BE CONFIRMED.")
+        print("The Submit control is still present.")
+        return False
 
     except Exception as e:
 
@@ -1959,9 +1984,15 @@ def inspect_and_prepare_form(
             "=" * 70
         )
 
+        live_step = get_application_step(page)
+        display_page = (
+            f"{live_step[0]}/{live_step[1]}"
+            if live_step else str(page_number)
+        )
+
         print(
             f"PROCESSING APPLICATION PAGE "
-            f"{page_number}"
+            f"{display_page}"
         )
 
         print(
