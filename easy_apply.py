@@ -261,228 +261,173 @@ def convert_to_job_url(link):
 
 def find_easy_apply_button(page):
     """
-    Find the LinkedIn Easy Apply application control.
+    Find the application control for the CURRENT LinkedIn job.
 
-    LinkedIn may display the visible button as "Apply"
-    while the job description says that the application
-    uses Easy Apply.
+    Priority:
+      1. Explicit Easy Apply control.
+      2. LinkedIn's accessibility label "LinkedIn Apply to this job".
+      3. A generic Apply control only when exactly ONE visible Apply
+         control exists on the page.
 
-    We therefore use:
-      1. Explicit Easy Apply controls
-      2. LinkedIn accessibility information
-      3. The job's application-process text
+    This prevents clicking Apply buttons belonging to recommended jobs.
     """
 
-    # ---------------------------------------
-    # 1. Explicit Easy Apply controls
-    # ---------------------------------------
-
-    selectors = [
-        "button",
-        "[role='button']",
-        "a"
-    ]
-
-    for selector in selectors:
-
+    def visible(element):
         try:
-
-            elements = page.locator(selector)
-
-            for i in range(elements.count()):
-
-                try:
-
-                    element = elements.nth(i)
-
-                    if not element.is_visible():
-                        continue
-
-                    text = (
-                        element
-                        .inner_text()
-                        .strip()
-                        .lower()
-                    )
-
-                    aria = (
-                        element
-                        .get_attribute("aria-label")
-                        or ""
-                    ).lower()
-
-                    title = (
-                        element
-                        .get_attribute("title")
-                        or ""
-                    ).lower()
-
-                    combined = (
-                        text
-                        + " "
-                        + aria
-                        + " "
-                        + title
-                    )
-
-                    if "easy apply" in combined:
-
-                        print(
-                            "Explicit Easy Apply control found."
-                        )
-
-                        return element
-
-                except Exception:
-                    continue
-
+            return element.is_visible()
         except Exception:
-            continue
+            return False
 
-    # ---------------------------------------
-    # 2. Inspect page text
-    # ---------------------------------------
+    def details(element):
+        try:
+            text = (element.inner_text() or "").strip()
+        except Exception:
+            text = ""
 
+        aria = element.get_attribute("aria-label") or ""
+        title = element.get_attribute("title") or ""
+        return text, aria, title
+
+    # -------------------------------------------------------
+    # 1. Explicit Easy Apply controls
+    # -------------------------------------------------------
     try:
+        elements = page.locator("button, [role='button'], a")
 
-        body = page.locator(
-            "body"
-        ).inner_text()
+        for i in range(elements.count()):
+            element = elements.nth(i)
+
+            if not visible(element):
+                continue
+
+            text, aria, title = details(element)
+            combined = f"{text} {aria} {title}".lower()
+
+            if "easy apply" in combined:
+                print("Explicit Easy Apply control found.")
+                return element
 
     except Exception:
+        pass
 
+    # -------------------------------------------------------
+    # 2. Inspect page text for Easy Apply evidence
+    # -------------------------------------------------------
+    try:
+        body = page.locator("body").inner_text()
+    except Exception:
         body = ""
 
     body_lower = body.lower()
 
-    # ---------------------------------------
-    # 3. Reject external applications
-    # ---------------------------------------
-
     external_signals = [
-
         "apply on company website",
-
         "apply on the company website",
-
         "apply externally",
-
         "application on company website",
-
-        "apply via company website"
+        "apply via company website",
     ]
 
-    for signal in external_signals:
-
-        if signal in body_lower:
-
-            print(
-                "External application detected."
-            )
-
-            return None
-
-    # ---------------------------------------
-    # 4. Easy Apply description signal
-    # ---------------------------------------
+    if any(signal in body_lower for signal in external_signals):
+        print("External application detected.")
+        return None
 
     easy_apply_signals = [
-
         "easy apply button",
-
         "submit your application through the easy apply button",
-
         "apply through the easy apply button",
-
-        "easy apply"
+        "easy apply",
     ]
 
-    easy_apply_description = False
+    has_easy_apply_evidence = any(
+        signal in body_lower
+        for signal in easy_apply_signals
+    )
 
-    for signal in easy_apply_signals:
+    if not has_easy_apply_evidence:
+        return None
 
-        if signal in body_lower:
+    print("Easy Apply confirmed from job description.")
 
-            easy_apply_description = True
-            break
+    # -------------------------------------------------------
+    # 3. Strong LinkedIn accessibility signal
+    # -------------------------------------------------------
+    try:
+        elements = page.locator("button, [role='button'], a")
 
-    if easy_apply_description:
+        for i in range(elements.count()):
+            element = elements.nth(i)
 
+            if not visible(element):
+                continue
+
+            text, aria, title = details(element)
+            combined = f"{text} {aria} {title}".lower()
+
+            if "linkedin apply to this job" in combined:
+                print("LinkedIn Apply control found.")
+                return element
+
+    except Exception:
+        pass
+
+    # LinkedIn can finish rendering the top-card control after the page
+    # initially loads.
+    try:
+        page.wait_for_timeout(1500)
+    except Exception:
+        pass
+
+    try:
+        elements = page.locator("button, [role='button'], a")
+
+        for i in range(elements.count()):
+            element = elements.nth(i)
+
+            if not visible(element):
+                continue
+
+            text, aria, title = details(element)
+            combined = f"{text} {aria} {title}".lower()
+
+            if "linkedin apply to this job" in combined:
+                print("LinkedIn Apply control found after render.")
+                return element
+
+    except Exception:
+        pass
+
+    # -------------------------------------------------------
+    # 4. Generic Apply fallback — ONLY if unique
+    # -------------------------------------------------------
+    apply_candidates = []
+
+    try:
+        elements = page.locator("button, [role='button'], a")
+
+        for i in range(elements.count()):
+            element = elements.nth(i)
+
+            if not visible(element):
+                continue
+
+            text, aria, title = details(element)
+
+            if text.strip().lower() == "apply":
+                apply_candidates.append(element)
+
+    except Exception:
+        pass
+
+    if len(apply_candidates) == 1:
+        print("Unique LinkedIn Apply control found.")
+        return apply_candidates[0]
+
+    if len(apply_candidates) > 1:
         print(
-            "Easy Apply confirmed from job description."
+            f"Found {len(apply_candidates)} generic Apply controls; "
+            "refusing to guess which one belongs to the current job."
         )
-
-        # ---------------------------------------
-        # Find the main Apply button
-        # ---------------------------------------
-
-        apply_candidates = []
-
-        try:
-
-            buttons = page.locator(
-                "button, [role='button'], a"
-            )
-
-            for i in range(buttons.count()):
-
-                try:
-
-                    element = buttons.nth(i)
-
-                    if not element.is_visible():
-                        continue
-
-                    text = (
-                        element
-                        .inner_text()
-                        .strip()
-                        .lower()
-                    )
-
-                    aria = (
-                        element
-                        .get_attribute(
-                            "aria-label"
-                        )
-                        or ""
-                    ).lower()
-
-                    combined = (
-                        text
-                        + " "
-                        + aria
-                    )
-
-                    # Main LinkedIn Apply button
-                    if (
-                        text == "apply"
-                        or
-                        "linkedin apply to this job"
-                        in combined
-                    ):
-
-                        apply_candidates.append(
-                            element
-                        )
-
-                except Exception:
-                    continue
-
-        except Exception:
-            pass
-
-        if apply_candidates:
-
-            print(
-                "LinkedIn Apply control found."
-            )
-
-            return apply_candidates[0]
-
-    # ---------------------------------------
-    # Nothing found
-    # ---------------------------------------
 
     return None
 
@@ -632,6 +577,120 @@ def save_diagnostic_screenshot(page):
         print(
             f"Screenshot failed: {e}"
         )
+
+
+
+# ---------------------------------------
+# Record Application Status
+# ---------------------------------------
+
+def record_application_status(job, status):
+    """
+    Update the tracker for the job after a confirmed application result.
+
+    The function adapts to the existing CSV headers instead of assuming
+    a fixed tracker schema.
+    """
+
+    try:
+        if not os.path.exists(TRACKER_FILE):
+            print(
+                f"Tracker file not found: {TRACKER_FILE}"
+            )
+            return False
+
+        with open(
+            TRACKER_FILE,
+            "r",
+            encoding="utf-8",
+            newline=""
+        ) as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames or []
+            rows = list(reader)
+
+        if "Status" not in fieldnames:
+            fieldnames.append("Status")
+
+        title = (
+            job.get("Title", "")
+            .strip()
+            .lower()
+        )
+
+        company = (
+            job.get("Company", "")
+            .strip()
+            .lower()
+        )
+
+        updated = False
+
+        for row in rows:
+            row_title = (
+                row.get("Title", "")
+                .strip()
+                .lower()
+            )
+
+            row_company = (
+                row.get("Company", "")
+                .strip()
+                .lower()
+            )
+
+            title_match = title and row_title == title
+            company_match = (
+                not company
+                or not row_company
+                or row_company == company
+            )
+
+            if title_match and company_match:
+                row["Status"] = status
+                updated = True
+                break
+
+        if not updated:
+            new_row = {
+                field: ""
+                for field in fieldnames
+            }
+
+            new_row["Title"] = job.get("Title", "")
+            new_row["Company"] = job.get("Company", "")
+            new_row["Location"] = job.get("Location", "")
+            new_row["Status"] = status
+
+            if "URL" in fieldnames:
+                new_row["URL"] = job.get("URL", "")
+
+            rows.append(new_row)
+
+        with open(
+            TRACKER_FILE,
+            "w",
+            encoding="utf-8",
+            newline=""
+        ) as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=fieldnames
+            )
+            writer.writeheader()
+            writer.writerows(rows)
+
+        print()
+        print(
+            f"Application tracker updated: {status}"
+        )
+        return True
+
+    except Exception as e:
+        print(
+            f"Could not update application tracker: {e}"
+        )
+        return False
 
 
 # ---------------------------------------
@@ -813,6 +872,50 @@ def open_easy_apply(job):
 
             body_text = ""
 
+                # ---------------------------------------
+        # Check already submitted application
+        # ---------------------------------------
+        body_lower = body_text.lower()
+
+        submitted_signals = [
+            "application submitted",
+            "application has been submitted",
+            "you applied",
+            "application status",
+        ]
+
+        if (
+            "application submitted" in body_lower
+            or "application has been submitted" in body_lower
+            or "you applied" in body_lower
+        ):
+            print()
+            print("=" * 70)
+            print("APPLICATION ALREADY SUBMITTED")
+            print("=" * 70)
+
+            print()
+            print(
+                "LinkedIn confirms that this application "
+                "was already submitted."
+            )
+
+            record_application_status(
+                job,
+                "APPLIED"
+            )
+
+            print()
+            print(
+                "Status updated to APPLIED."
+            )
+
+            print(
+                "Skipping this job and continuing..."
+            )
+
+            return False
+
         # ---------------------------------------
         # Check closed job
         # ---------------------------------------
@@ -944,9 +1047,15 @@ def open_easy_apply(job):
 
         try:
 
-            inspect_and_prepare_form(
+            application_success = inspect_and_prepare_form(
                 page
             )
+
+            if application_success:
+                record_application_status(
+                    job,
+                    "APPLIED"
+                )
 
         except Exception as e:
 
