@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 ANALYSIS_FILE = "data/job_analysis.csv"
 TRACKER_FILE = "data/application_tracker.csv"
 
-MIN_MATCH_SCORE = 70
+MIN_MATCH_SCORE = 35
 
 CHROME_CDP_URL = "http://127.0.0.1:9222"
 
@@ -125,12 +125,14 @@ def get_recommended_jobs():
         # Apply filters
         # ---------------------------------------
 
-        if score < MIN_MATCH_SCORE:
+        # ---------------------------------------
+# Apply filters
+# ---------------------------------------
 
+        if score < MIN_MATCH_SCORE:
             continue
 
         if status != "NOT APPLIED":
-
             continue
 
         recommended.append(job)
