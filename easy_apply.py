@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 ANALYSIS_FILE = "data/job_analysis.csv"
 TRACKER_FILE = "data/application_tracker.csv"
 
-MIN_MATCH_SCORE = 35
+MIN_MATCH_SCORE = 70
 
 CHROME_CDP_URL = "http://127.0.0.1:9222"
 
@@ -125,14 +125,12 @@ def get_recommended_jobs():
         # Apply filters
         # ---------------------------------------
 
-        # ---------------------------------------
-# Apply filters
-# ---------------------------------------
-
         if score < MIN_MATCH_SCORE:
+
             continue
 
         if status != "NOT APPLIED":
+
             continue
 
         recommended.append(job)
@@ -313,7 +311,64 @@ def find_easy_apply_button(page):
         pass
 
     # -------------------------------------------------------
-    # 2. Inspect page text for Easy Apply evidence
+    # 2. Strong LinkedIn accessibility signal
+    #
+    # IMPORTANT:
+    # LinkedIn may expose the current-job Apply button as:
+    #   aria-label="LinkedIn Apply to this job"
+    # without using the words "Easy Apply" anywhere in the
+    # visible job description.
+    #
+    # This check MUST happen before external-application
+    # detection and before requiring "easy apply" text.
+    # -------------------------------------------------------
+    try:
+        elements = page.locator("button, [role='button'], a")
+
+        for i in range(elements.count()):
+            element = elements.nth(i)
+
+            if not visible(element):
+                continue
+
+            text, aria, title = details(element)
+            combined = f"{text} {aria} {title}".lower()
+
+            if "linkedin apply to this job" in combined:
+                print("LinkedIn Apply control found.")
+                return element
+
+    except Exception:
+        pass
+
+    # LinkedIn can finish rendering the top-card control after
+    # the page initially loads.
+    try:
+        page.wait_for_timeout(1500)
+    except Exception:
+        pass
+
+    try:
+        elements = page.locator("button, [role='button'], a")
+
+        for i in range(elements.count()):
+            element = elements.nth(i)
+
+            if not visible(element):
+                continue
+
+            text, aria, title = details(element)
+            combined = f"{text} {aria} {title}".lower()
+
+            if "linkedin apply to this job" in combined:
+                print("LinkedIn Apply control found after render.")
+                return element
+
+    except Exception:
+        pass
+
+    # -------------------------------------------------------
+    # 3. Inspect page text for Easy Apply / external evidence
     # -------------------------------------------------------
     try:
         body = page.locator("body").inner_text()
@@ -352,7 +407,7 @@ def find_easy_apply_button(page):
     print("Easy Apply confirmed from job description.")
 
     # -------------------------------------------------------
-    # 3. Strong LinkedIn accessibility signal
+    # 4. Re-check LinkedIn accessibility signal
     # -------------------------------------------------------
     try:
         elements = page.locator("button, [role='button'], a")
@@ -873,50 +928,6 @@ def open_easy_apply(job):
         except Exception:
 
             body_text = ""
-
-                # ---------------------------------------
-        # Check already submitted application
-        # ---------------------------------------
-        body_lower = body_text.lower()
-
-        submitted_signals = [
-            "application submitted",
-            "application has been submitted",
-            "you applied",
-            "application status",
-        ]
-
-        if (
-            "application submitted" in body_lower
-            or "application has been submitted" in body_lower
-            or "you applied" in body_lower
-        ):
-            print()
-            print("=" * 70)
-            print("APPLICATION ALREADY SUBMITTED")
-            print("=" * 70)
-
-            print()
-            print(
-                "LinkedIn confirms that this application "
-                "was already submitted."
-            )
-
-            record_application_status(
-                job,
-                "APPLIED"
-            )
-
-            print()
-            print(
-                "Status updated to APPLIED."
-            )
-
-            print(
-                "Skipping this job and continuing..."
-            )
-
-            return False
 
         # ---------------------------------------
         # Check closed job
