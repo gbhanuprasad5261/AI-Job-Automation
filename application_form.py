@@ -1457,6 +1457,325 @@ def fill_education_dates(container, page):
 
 
 # ============================================================
+# Job-specific application questions
+# ============================================================
+
+APPLICATION_ANSWERS = {
+    "java_experience": "0",
+    "spring_boot_experience": "0",
+    "atg_commerce_experience": "0",
+    "onsite_comfort": "Yes",
+    "cloud_production": "Yes",
+    "rest_microservices_production": "Yes",
+    "public_facing": "No",
+    "current_salary": "0",
+    "expected_salary": "5 LPA",
+}
+
+
+def _element_context(element):
+    """Return nearby visible text used to identify a LinkedIn form field."""
+    texts = []
+    try:
+        texts.append(safe_text(element))
+    except Exception:
+        pass
+
+    for xpath in [
+        "xpath=ancestor::fieldset[1]",
+        "xpath=ancestor::div[.//label][1]",
+        "xpath=ancestor::div[.//input][1]",
+        "xpath=ancestor::li[1]",
+    ]:
+        try:
+            loc = element.locator(xpath).first
+            if loc.count() and is_visible(loc):
+                txt = safe_text(loc)
+                if txt:
+                    texts.append(txt)
+        except Exception:
+            pass
+
+    return normalize(" ".join(texts)).lower()
+
+
+def _click_radio_by_question_text(page, question_pattern, answer):
+    """
+    Answer a radio question by locating the radio group whose nearby DOM
+    text contains the question. This is designed for LinkedIn's custom
+    radio controls where input value/name labels may be empty.
+    """
+    try:
+        radios = page.locator("input[type='radio']")
+        count = radios.count()
+
+        for i in range(count):
+            radio = radios.nth(i)
+            try:
+                if not radio.is_visible():
+                    # LinkedIn can hide the actual input behind a styled label;
+                    # still allow it if its DOM ancestor is visible.
+                    pass
+
+                context = radio.evaluate(
+                    """el => {
+                        let parts = [];
+                        let node = el;
+                        for (let i = 0; node && i < 8; i++, node = node.parentElement) {
+                            if (node.innerText) parts.push(node.innerText);
+                        }
+                        return parts.join("\\n");
+                    }"""
+                ) or ""
+
+                if not re.search(question_pattern, context, re.IGNORECASE):
+                    continue
+
+                group_name = radio.get_attribute("name") or ""
+                if not group_name:
+                    continue
+
+                group = page.locator(
+                    "input[type='radio'][name='" +
+                    group_name.replace("'", "\\'") +
+                    "']"
+                )
+
+                if group.count() < 2:
+                    continue
+
+                # For the current LinkedIn form the two options are rendered
+                # in visible order: Yes, then No.
+                index = 0 if answer.lower() == "yes" else 1
+
+                # First try clicking the visible label/text associated with
+                # the selected radio.
+                candidate = group.nth(index)
+                rid = candidate.get_attribute("id") or ""
+
+                if rid:
+                    labels = page.locator(f"label[for='{rid}']")
+                    for j in range(labels.count()):
+                        label = labels.nth(j)
+                        if label.is_visible():
+                            label.click()
+                            page.wait_for_timeout(300)
+                            if candidate.is_checked():
+                                print(f"Answered: {answer}")
+                                return True
+
+                # Fallback: directly check the input.
+                candidate.check(force=True)
+                page.wait_for_timeout(300)
+
+                if candidate.is_checked():
+                    print(f"Answered: {answer}")
+                    return True
+
+            except Exception:
+                continue
+
+    except Exception:
+        pass
+
+    print(f"Could not identify the radio buttons for: {answer}")
+    return False
+
+
+def _click_radio_by_context(container, keywords, answer):
+    """Find a radio group whose surrounding question matches keywords."""
+    radios = container.locator("input[type='radio']")
+    for i in range(radios.count()):
+        radio = radios.nth(i)
+        if not is_visible(radio):
+            continue
+
+        context = _element_context(radio)
+        if not all(keyword.lower() in context for keyword in keywords):
+            continue
+
+        group_name = safe_attribute(radio, "name")
+        group = (
+            container.locator(
+                f"input[type='radio'][name='{group_name}']"
+            )
+            if group_name
+            else radios
+        )
+
+        for j in range(group.count()):
+            candidate = group.nth(j)
+            candidate_context = _element_context(candidate)
+            value = (
+                safe_attribute(candidate, "value")
+                + " "
+                + candidate_context
+            ).lower()
+
+            if answer.lower() not in value:
+                continue
+
+            try:
+                candidate.check(force=True)
+                print(f"Answered: {answer}")
+                return True
+            except Exception:
+                pass
+
+            # LinkedIn often uses a label around the radio.
+            try:
+                rid = safe_attribute(candidate, "id")
+                if rid:
+                    label = container.locator(
+                        f"label[for='{rid}']"
+                    ).first
+                    if label.count() and is_visible(label):
+                        label.click()
+                        print(f"Answered: {answer}")
+                        return True
+            except Exception:
+                pass
+
+        # Also try visible Yes/No labels inside the same group.
+        try:
+            parent = radio.locator("xpath=ancestor::fieldset[1]").first
+            if parent.count():
+                labels = parent.locator("label")
+                for j in range(labels.count()):
+                    label = labels.nth(j)
+                    if not is_visible(label):
+                        continue
+                    label_text = normalize(safe_text(label)).lower()
+                    if label_text == answer.lower():
+                        label.click()
+                        print(f"Answered: {answer}")
+                        return True
+        except Exception:
+            pass
+
+    return False
+
+
+def _fill_text_by_context(container, keywords, value, display_name):
+    """Fill an empty text/number field whose nearby question matches keywords."""
+    fields = container.locator("input, textarea")
+    for i in range(fields.count()):
+        field = fields.nth(i)
+        if not is_visible(field):
+            continue
+
+        field_type = safe_attribute(field, "type").lower()
+        if field_type in {
+            "hidden", "file", "radio", "checkbox",
+            "button", "submit"
+        }:
+            continue
+
+        context = _element_context(field)
+        if not all(keyword.lower() in context for keyword in keywords):
+            continue
+
+        if fill_if_empty(field, value):
+            print(f"{display_name}: {value}")
+            return True
+
+    return False
+
+
+def fill_known_application_questions(container, page=None):
+    """
+    Fill only the application questions for which the user supplied explicit
+    answers. No experience, salary, cloud, or production claims are guessed.
+    """
+    print()
+    print("=" * 70)
+    print("FILLING KNOWN APPLICATION QUESTIONS")
+    print("=" * 70)
+
+    filled = 0
+
+    # Experience questions: the user has hands-on/training experience, not
+    # professional years of employment, so both are explicitly 0.
+    if _fill_text_by_context(
+        container,
+        ["java", "experience"],
+        APPLICATION_ANSWERS["java_experience"],
+        "Java experience",
+    ):
+        filled += 1
+
+    if _fill_text_by_context(
+        container,
+        ["spring", "boot", "experience"],
+        APPLICATION_ANSWERS["spring_boot_experience"],
+        "Spring Boot experience",
+    ):
+        filled += 1
+
+    # Current Diligente Technologies question:
+    # "Are you comfortable working in an onsite setting?" -> Yes.
+    if page is not None and _click_radio_by_question_text(
+        page,
+        r"Are you comfortable working in an onsite setting\?",
+        APPLICATION_ANSWERS["onsite_comfort"],
+    ):
+        filled += 1
+
+    # ATG Commerce professional experience -> 0 years.
+    # Hands-on/training experience is not counted as professional employment.
+    if _fill_text_by_context(
+        container,
+        ["atg", "commerce", "experience"],
+        APPLICATION_ANSWERS["atg_commerce_experience"],
+        "ATG Commerce experience",
+    ):
+        filled += 1
+
+    # Yes/No production questions.
+    if _click_radio_by_context(
+        container,
+        ["cloud", "production"],
+        APPLICATION_ANSWERS["cloud_production"],
+    ):
+        filled += 1
+
+    if _click_radio_by_context(
+        container,
+        ["rest", "microservices", "production"],
+        APPLICATION_ANSWERS["rest_microservices_production"],
+    ):
+        filled += 1
+
+    if _click_radio_by_context(
+        container,
+        ["public", "facing"],
+        APPLICATION_ANSWERS["public_facing"],
+    ):
+        filled += 1
+
+    # Salary questions. Use "current" and "salary/compensation", and
+    # "expected" and "salary/compensation", so unrelated numeric fields are
+    # not touched.
+    if _fill_text_by_context(
+        container,
+        ["current", "salary"],
+        APPLICATION_ANSWERS["current_salary"],
+        "Current salary",
+    ):
+        filled += 1
+
+    if _fill_text_by_context(
+        container,
+        ["expected", "salary"],
+        APPLICATION_ANSWERS["expected_salary"],
+        "Expected salary",
+    ):
+        filled += 1
+
+    print(f"Known application answers filled: {filled}")
+    return filled
+
+# ============================================================
 # Prepare Current Application Page
 # ============================================================
 
@@ -1522,6 +1841,15 @@ def prepare_current_page(page: Page):
     )
 
     # --------------------------------------------------------
+    # Explicit application answers supplied by the user
+    # --------------------------------------------------------
+
+    fill_known_application_questions(
+        container,
+        page
+    )
+
+    # --------------------------------------------------------
     # Other controls
     # --------------------------------------------------------
 
@@ -1580,17 +1908,49 @@ def move_to_next_page(page: Page):
         print(f"Could not move to next page: {e}")
         return False
 
+    before_text = ""
+    try:
+        before_text = normalize(
+            get_application_container(page).inner_text()
+        )
+    except Exception:
+        pass
+
     for _ in range(20):
         page.wait_for_timeout(500)
         after = get_application_step(page)
+
         if before and after:
             if after[1] == before[1] and after[0] > before[0]:
                 print("Moved to next application page.")
                 print(f"New application step: {after[0]}/{after[1]}")
                 return True
+
         elif not before and after:
-            print(f"Application step detected after navigation: {after[0]}/{after[1]}")
+            print(
+                f"Application step detected after navigation: "
+                f"{after[0]}/{after[1]}"
+            )
             return True
+
+        # LinkedIn can temporarily keep the progress indicator at 3/4.
+        # Detect actual modal content replacement as a fallback.
+        try:
+            after_text = normalize(
+                get_application_container(page).inner_text()
+            )
+            if (
+                before_text
+                and after_text
+                and after_text != before_text
+                and len(after_text) > 20
+            ):
+                print("Application form content changed.")
+                if after:
+                    print(f"Current application step: {after[0]}/{after[1]}")
+                return True
+        except Exception:
+            pass
 
     current = get_application_step(page)
     print()
@@ -1745,7 +2105,7 @@ def inspect_and_prepare_form(
     # Process multiple application pages
     # --------------------------------------------------------
 
-    max_pages = 5
+    max_pages = 6
 
     for page_number in range(
         1,
