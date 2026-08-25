@@ -1060,14 +1060,32 @@ def open_easy_apply(job):
 
         try:
 
-            application_success = inspect_and_prepare_form(
+            application_status = inspect_and_prepare_form(
                 page
             )
 
-            if application_success:
+            print()
+            print(
+                f"Application automation result: {application_status}"
+            )
+
+            # NEVER mark a job as APPLIED merely because the form opened
+            # or because automation stopped. Only a confirmed submission
+            # may update the tracker to APPLIED.
+            if application_status == "SUBMITTED":
                 record_application_status(
                     job,
                     "APPLIED"
+                )
+            elif application_status == "READY_FOR_REVIEW":
+                record_application_status(
+                    job,
+                    "READY_FOR_REVIEW"
+                )
+            else:
+                print(
+                    "Application was not confirmed as submitted. "
+                    "Tracker will NOT be marked APPLIED."
                 )
 
         except Exception as e:
@@ -1082,7 +1100,7 @@ def open_easy_apply(job):
 
             return False
 
-        return True
+        return application_status
 
 
 # ---------------------------------------
@@ -1182,24 +1200,38 @@ def main():
         # a candidate hint because LinkedIn status
         # can change after the CSV is generated.
 
-        success = open_easy_apply(job)
+        result = open_easy_apply(job)
 
         # ---------------------------------------
-        # Active Easy Apply found
+        # Application result
         # ---------------------------------------
 
-        if success:
+        if result in ("SUBMITTED", "READY_FOR_REVIEW"):
 
             print()
             print("=" * 70)
 
             print(
-                "READY FOR APPLICATION AUTOMATION"
+                f"APPLICATION RESULT: {result}"
             )
 
             print("=" * 70)
 
             return
+
+        if result == "SKIPPED_REQUIRED_UNKNOWN":
+            print()
+            print(
+                "Job skipped because a required field could not "
+                "be answered safely."
+            )
+
+        elif result == "SUBMIT_UNCONFIRMED":
+            print()
+            print(
+                "Submission could not be confirmed. "
+                "Job was NOT marked APPLIED."
+            )
 
         # ---------------------------------------
         # Try next job

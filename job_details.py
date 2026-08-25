@@ -55,6 +55,21 @@ def extract_company_from_header(page):
     if value:
         return value
 
+        # Current LinkedIn layout: company is exposed as a /company/ link.
+    try:
+        links = page.locator("a[href*='/company/']")
+        for i in range(links.count()):
+            link = links.nth(i)
+            if not link.is_visible():
+                continue
+
+            text = clean_text(link.inner_text())
+
+            if text and len(text) <= 150:
+                return text
+    except Exception:
+        pass
+
     # Fallback: locate the h1 and inspect only its nearby ancestor.
     try:
         h1 = page.locator("h1").first
@@ -492,3 +507,4 @@ def extract_job_details():
 
 if __name__ == "__main__":
     extract_job_details()
+
